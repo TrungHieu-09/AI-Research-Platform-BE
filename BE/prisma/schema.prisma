@@ -1,0 +1,234 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+enum Role {
+  STUDENT
+  ADMIN
+}
+
+enum AccountStatus {
+  ACTIVE
+  SUSPENDED
+}
+
+enum AccountTier {
+  FREE
+  PREMIUM
+}
+
+enum DocumentVisibility {
+  PRIVATE
+  PUBLIC
+}
+
+enum ModerationStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum ChatScope {
+  SINGLE_DOCUMENT
+  SUBJECT
+  GLOBAL
+}
+
+enum SenderType {
+  USER
+  AI
+}
+
+enum PaymentStatus {
+  PENDING
+  COMPLETED
+  FAILED
+}
+
+enum SuggestionStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+model User {
+  id                 String              @id @default(uuid()) @db.Uuid
+  name               String
+  email              String              @unique
+  avatarUrl          String?
+  passwordHash       String?
+  role               Role                @default(STUDENT)
+  status             AccountStatus       @default(ACTIVE)
+  tier               AccountTier         @default(FREE)
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
+  documents          Document[]          @relation("UserDocuments")
+  moderatedDocs      Document[]          @relation("ModeratedDocuments")
+  subjectSuggestions SubjectSuggestion[]
+  chatSessions       ChatSession[]
+  paymentReceipts    PaymentReceipt[]
+  auditLogs          AuditLog[]
+
+  @@map("users")
+}
+
+model OneTimePassword {
+  id        String   @id @default(uuid()) @db.Uuid
+  email     String
+  otpCode   String
+  expiresAt DateTime
+  attempts  Int      @default(0)
+  createdAt DateTime @default(now())
+
+  @@map("one_time_passwords")
+}
+
+model Subject {
+  id           String             @id @default(uuid()) @db.Uuid
+  name         String
+  code         String             @unique
+  status       AccountStatus      @default(ACTIVE)
+  createdAt    DateTime           @default(now())
+  updatedAt    DateTime           @updatedAt
+  documents    Document[]
+  chatSessions ChatSession[]
+  suggestions  SubjectSuggestion[]
+
+  @@map("subjects")
+}
+
+model SubjectSuggestion {
+  id           String           @id @default(uuid()) @db.Uuid
+  name         String
+  status       SuggestionStatus @default(PENDING)
+  proposedById String           @db.Uuid
+  proposedBy   User             @relation(fields: [proposedById], references: [id])
+  subjectId    String?          @db.Uuid
+  subject      Subject?         @relation(fields: [subjectId], references: [id])
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
+
+  @@map("subject_suggestions")
+}
+
+model Document {
+  id              String             @id @default(uuid()) @db.Uuid
+  title           String
+  description     String?            @db.Text
+  fileUrl         String
+  fileHash        String
+  fileSize        Int
+  mimeType        String
+  visibility      DocumentVisibility @default(PRIVATE)
+  status          ModerationStatus   @default(PENDING)
+  rejectionReason String?            @db.Text
+  pageCount       Int                @default(0)
+  ownerId         String             @db.Uuid
+  owner           User               @relation("UserDocuments", fields: [ownerId], references: [id])
+  subjectId       String             @db.Uuid
+  subject         Subject            @relation(fields: [subjectId], references: [id])
+  moderatedById   String?            @db.Uuid
+  moderatedBy     User?              @relation("ModeratedDocuments", fields: [moderatedById], references: [id])
+  moderatedAt     DateTime?
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
+  deletedAt       DateTime?
+  chunks          DocumentChunk[]
+  chatSessions    ChatSession[]
+  citations       Citation[]
+  auditLogs       AuditLog[]
+
+  @@index([status, deletedAt])
+  @@map("documents")
+}
+
+model DocumentChunk {
+  id         String   @id @default(uuid()) @db.Uuid
+  documentId String   @db.Uuid
+  document   Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  chunkIndex Int
+  pageNumber Int
+  content    String   @db.Text
+  metadata   Json?    @default("{}")
+  embedding  Unsupported("vector(1536)")?
+  createdAt  DateTime @default(now())
+
+  @@map("document_chunks")
+}
+
+model ChatSession {
+  id        String        @id @default(uuid()) @db.Uuid
+  title     String?
+  userId    String        @db.Uuid
+  user      User          @relation(fields: [userId], references: [id])
+  documentId String?      @db.Uuid
+  document  Document?     @relation(fields: [documentId], references: [id])
+  subjectId String?       @db.Uuid
+  subject   Subject?      @relation(fields: [subjectId], references: [id])
+  scope     ChatScope     @default(SINGLE_DOCUMENT)
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+  messages  ChatMessage[]
+
+  @@map("chat_sessions")
+}
+
+model ChatMessage {
+  id        String      @id @default(uuid()) @db.Uuid
+  sessionId String      @db.Uuid
+  session   ChatSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  sender    SenderType
+  message   String      @db.Text
+  createdAt DateTime    @default(now())
+  citations Citation[]
+
+  @@map("chat_messages")
+}
+
+model Citation {
+  id             String      @id @default(uuid()) @db.Uuid
+  messageId      String      @db.Uuid
+  message        ChatMessage @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  documentId     String      @db.Uuid
+  document       Document    @relation(fields: [documentId], references: [id])
+  pageNumber     Int
+  paragraphIndex Int?
+  textExcerpt    String      @db.Text
+  createdAt      DateTime    @default(now())
+
+  @@map("citations")
+}
+
+model PaymentReceipt {
+  id              String        @id @default(uuid()) @db.Uuid
+  userId          String        @db.Uuid
+  user            User          @relation(fields: [userId], references: [id])
+  planId          String
+  amount          Decimal       @db.Decimal(10, 2)
+  transferContent String        @unique
+  status          PaymentStatus @default(PENDING)
+  createdAt       DateTime      @default(now())
+  verifiedAt      DateTime?
+
+  @@map("payment_receipts")
+}
+
+model AuditLog {
+  id           String    @id @default(uuid()) @db.Uuid
+  userId       String?   @db.Uuid
+  user         User?     @relation(fields: [userId], references: [id])
+  action       String
+  targetEntity String
+  targetId     String?
+  documentId   String?   @db.Uuid
+  document     Document? @relation(fields: [documentId], references: [id])
+  ipAddress    String?
+  createdAt    DateTime  @default(now())
+
+  @@map("audit_logs")
+}
