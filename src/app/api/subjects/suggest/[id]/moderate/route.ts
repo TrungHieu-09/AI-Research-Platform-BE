@@ -1,8 +1,56 @@
 import { NextRequest, NextResponse } from "next/server"
 import { db } from "@/lib/db"
 
+/**
+ * @swagger
+ * /api/subjects/suggest/{id}/moderate:
+ *   post:
+ *     summary: Moderate Subject Suggestion (Admin only)
+ *     description: >
+ *       Allows an Admin to approve or reject a student proposed subject suggestion.
+ *       If approved (`action: "APPROVED"`), a new Subject is automatically created and activated.
+ *     tags:
+ *       - Subjects
+ *     security:
+ *       - BearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *         description: Suggestion ID (UUID).
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - action
+ *             properties:
+ *               action:
+ *                 type: string
+ *                 enum: [APPROVED, REJECTED]
+ *                 example: "APPROVED"
+ *     responses:
+ *       200:
+ *         description: Suggestion processed successfully.
+ *       400:
+ *         description: Invalid action or suggestion already processed.
+ *       403:
+ *         description: Access denied (Admin role required).
+ *       404:
+ *         description: Suggestion not found.
+ */
 export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
   try {
+    const role = req.headers.get("x-user-role")
+    if (role !== "ADMIN") {
+      return NextResponse.json({ error: "Access denied. Admin role required." }, { status: 403 })
+    }
+
     const adminId = req.headers.get("x-user-id")
     if (!adminId) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
@@ -57,8 +105,8 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       }
     })
 
-    return NextResponse.json(updatedSuggestion)
+    return NextResponse.json(updatedSuggestion, { status: 200 })
   } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 500 })
+    return NextResponse.json({ error: error.message ?? "Failed to process suggestion." }, { status: 500 })
   }
 }
