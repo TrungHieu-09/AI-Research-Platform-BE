@@ -14,6 +14,7 @@ const ROLE_HIERARCHY = {
 type Role = keyof typeof ROLE_HIERARCHY
 
 const ROUTE_RULES: { path: string; minRole: Role }[] = [
+  { path: "/api/notifications", minRole: "STUDENT" },
   { path: "/api/collections", minRole: "STUDENT" },
   { path: "/api/bookmarks", minRole: "STUDENT" },
   { path: "/api/documents/upload-url", minRole: "STUDENT" },
