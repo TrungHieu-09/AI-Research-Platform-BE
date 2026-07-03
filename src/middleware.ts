@@ -26,6 +26,7 @@ const ROUTE_RULES: { path: string; minRole: Role }[] = [
   // Admin+ routes
   { path: "/api/documents/moderate", minRole: "ADMIN" },
   // Admin-only routes
+  { path: "/api/admin", minRole: "ADMIN" },
   { path: "/api/subjects", minRole: "ADMIN" },
   { path: "/api/users", minRole: "ADMIN" },
   { path: "/api/payments/webhook", minRole: "ADMIN" },
