@@ -23,6 +23,7 @@ const ROUTE_RULES: { path: string; minRole: Role }[] = [
   { path: "/api/ai/chat", minRole: "STUDENT" },
   { path: "/api/ai/limit", minRole: "STUDENT" },
   { path: "/api/payments/checkout", minRole: "STUDENT" },
+  { path: "/api/payments/receipts", minRole: "STUDENT" },
   { path: "/api/documents", minRole: "STUDENT" }, // general doc access
   // Admin+ routes
   { path: "/api/documents/moderate", minRole: "ADMIN" },

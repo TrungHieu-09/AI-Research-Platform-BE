@@ -64,3 +64,19 @@ export async function handlePaymentWebhook(transferContent: string, amountReceiv
 
   return { success: true, message: "Payment verified. Premium tier activated." }
 }
+
+export async function getUserReceipts(userId: string) {
+  return db.paymentReceipt.findMany({
+    where: { userId },
+    orderBy: { createdAt: "desc" },
+    select: {
+      id: true,
+      planId: true,
+      amount: true,
+      transferContent: true,
+      status: true,
+      createdAt: true,
+      verifiedAt: true,
+    },
+  })
+}
