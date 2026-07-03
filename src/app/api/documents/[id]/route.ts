@@ -6,30 +6,56 @@ import { getDocumentById, softDeleteDocument } from "@/lib/services/doc-service"
  * /api/documents/{id}:
  *   get:
  *     summary: Get Document Details
- *     tags: [Documents]
+ *     description: Retrieve details of a specific document including its owner and subject. Automatically increments document view count if accessible.
+ *     tags:
+ *       - Documents
  *     security:
  *       - BearerAuth: []
  *     parameters:
  *       - in: path
  *         name: id
  *         required: true
- *         schema: { type: string }
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *         description: Document ID (UUID).
  *     responses:
  *       200:
- *         description: Document details
+ *         description: Document details retrieved successfully.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Document'
+ *       403:
+ *         description: Access denied (Private document owned by another user).
+ *       404:
+ *         description: Document not found.
  *   delete:
  *     summary: Soft Delete Document
- *     tags: [Documents]
+ *     description: Soft delete a document by setting its `deletedAt` timestamp. Document can be restored within 30 days. Restricted to document owner or Admin.
+ *     tags:
+ *       - Documents
  *     security:
  *       - BearerAuth: []
  *     parameters:
  *       - in: path
  *         name: id
  *         required: true
- *         schema: { type: string }
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *         description: Document ID (UUID).
  *     responses:
- *       204:
- *         description: Document soft deleted
+ *       200:
+ *         description: Document soft deleted successfully.
+ *         content:
+ *           application/json:
+ *             example:
+ *               message: "Document deleted successfully."
+ *       403:
+ *         description: Permission denied (Not owner or Admin).
+ *       404:
+ *         description: Document not found.
  */
 // GET /api/documents/[id]
 export async function GET(req: NextRequest, { params }: { params: { id: string } }) {

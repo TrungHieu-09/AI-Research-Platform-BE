@@ -7,33 +7,63 @@ import { moderateDocument } from "@/lib/services/doc-service"
  * /api/documents/{id}/moderate:
  *   post:
  *     summary: Moderate Document (Approve/Reject)
- *     tags: [Moderation]
+ *     description: >
+ *       Allows an Admin to approve or reject a pending public document.
+ *       Supports alias keys `decision` or `status` from Frontend. If rejected, `rejectionReason` is required.
+ *       Side-effect: automatically records an audit log entry.
+ *     tags:
+ *       - Documents
  *     security:
  *       - BearerAuth: []
  *     parameters:
  *       - in: path
  *         name: id
  *         required: true
- *         schema: { type: string }
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *         description: Document ID (UUID).
  *     requestBody:
  *       required: true
  *       content:
  *         application/json:
  *           schema:
  *             type: object
+ *             required:
+ *               - decision
  *             properties:
- *               status:
+ *               decision:
  *                 type: string
  *                 enum: [APPROVED, REJECTED]
+ *                 description: Can also pass alias field `status`.
+ *                 example: "APPROVED"
  *               rejectionReason:
  *                 type: string
+ *                 description: Required if decision is REJECTED.
+ *                 example: "Violates academic formatting guidelines."
  *     responses:
  *       200:
- *         description: Document moderation updated
+ *         description: Document moderation updated successfully.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Document'
+ *       400:
+ *         description: Invalid status transition or missing rejection reason.
+ *       403:
+ *         description: Access denied (Admin role required).
+ *       404:
+ *         description: Document not found.
+ *       422:
+ *         description: Validation error.
  */
-// POST /api/documents/[id]/moderate  — Admin only (enforced by middleware)
 export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
   try {
+    const role = req.headers.get("x-user-role")
+    if (role !== "ADMIN") {
+      return NextResponse.json({ error: "Access denied. Admin role required." }, { status: 403 })
+    }
+
     const adminId = req.headers.get("x-user-id")!
     const ipAddress = req.headers.get("x-forwarded-for") ?? req.ip
     const body = await req.json()
