@@ -7,22 +7,62 @@ import { getUserDocuments, createDocument } from "@/lib/services/doc-service"
  * /api/documents:
  *   get:
  *     summary: List User Documents
- *     tags: [Documents]
+ *     description: >
+ *       Returns a paginated list of documents owned by the authenticated user.
+ *       Includes nested subject metadata for each document.
+ *     tags:
+ *       - Documents
  *     security:
  *       - BearerAuth: []
  *     parameters:
  *       - in: query
  *         name: page
- *         schema: { type: integer, default: 1 }
+ *         schema:
+ *           type: integer
+ *           default: 1
+ *         description: Page number (min 1).
+ *         example: 1
  *       - in: query
  *         name: pageSize
- *         schema: { type: integer, default: 20 }
+ *         schema:
+ *           type: integer
+ *           default: 20
+ *         description: Number of items per page (max 50).
+ *         example: 20
  *     responses:
  *       200:
- *         description: A paginated list of documents
+ *         description: Paginated list of documents.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 items:
+ *                   type: array
+ *                   items:
+ *                     $ref: '#/components/schemas/Document'
+ *                 total:
+ *                   type: integer
+ *                   example: 45
+ *                 page:
+ *                   type: integer
+ *                   example: 1
+ *                 pageSize:
+ *                   type: integer
+ *                   example: 20
+ *       401:
+ *         description: Unauthorized missing/invalid token.
+ *       500:
+ *         description: Internal server error.
  *   post:
  *     summary: Register Document Metadata
- *     tags: [Documents]
+ *     description: >
+ *       Registers document metadata after successful file upload to cloud storage.
+ *       Automatic workflow logic: if visibility is `PRIVATE`, status defaults to `APPROVED`
+ *       immediately for instant AI RAG usage. If `PUBLIC`, status is set to `PENDING`
+ *       awaiting Admin review.
+ *     tags:
+ *       - Documents
  *     security:
  *       - BearerAuth: []
  *     requestBody:
@@ -31,17 +71,63 @@ import { getUserDocuments, createDocument } from "@/lib/services/doc-service"
  *         application/json:
  *           schema:
  *             type: object
+ *             required:
+ *               - title
+ *               - subjectId
+ *               - visibility
+ *               - fileUrl
+ *               - fileHash
+ *               - fileSize
+ *               - mimeType
+ *               - pageCount
  *             properties:
- *               title: { type: string }
- *               description: { type: string }
- *               fileHash: { type: string }
- *               fileSize: { type: integer }
- *               mimeType: { type: string }
- *               fileUrl: { type: string }
- *               subjectId: { type: string }
+ *               title:
+ *                 type: string
+ *                 minLength: 3
+ *                 example: "Giáo trình Lập trình Web"
+ *               description:
+ *                 type: string
+ *                 example: "Tài liệu môn Web cơ bản cho sinh viên IT"
+ *               subjectId:
+ *                 type: string
+ *                 format: uuid
+ *                 example: "550e8400-e29b-41d4-a716-446655440000"
+ *               visibility:
+ *                 type: string
+ *                 enum: [PRIVATE, PUBLIC]
+ *                 default: PRIVATE
+ *               fileUrl:
+ *                 type: string
+ *                 example: "https://storage.googleapis.com/bucket/doc.pdf"
+ *               fileHash:
+ *                 type: string
+ *                 description: SHA-256 hash (64 hex characters) of file contents.
+ *                 example: "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+ *               fileSize:
+ *                 type: integer
+ *                 example: 5242880
+ *               mimeType:
+ *                 type: string
+ *                 example: "application/pdf"
+ *               pageCount:
+ *                 type: integer
+ *                 example: 120
  *     responses:
  *       201:
- *         description: Document metadata registered
+ *         description: Document registered successfully.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Document'
+ *             example:
+ *               id: "550e8400-e29b-41d4-a716-446655440002"
+ *               title: "Giáo trình Lập trình Web"
+ *               status: "APPROVED"
+ *               visibility: "PRIVATE"
+ *       400:
+ *         description: Bad request or duplicate file hash.
+ *       422:
+ *         description: Validation error.
  */
 // GET /api/documents — list caller's documents (paginated)
 export async function GET(req: NextRequest) {
