@@ -6,8 +6,10 @@ import { z } from "zod"
  * @swagger
  * /api/payments/checkout:
  *   post:
- *     summary: Initiate Order Checkout
- *     tags: [Payments]
+ *     summary: Initiate Subscription Checkout
+ *     description: Creates a payment intent or bank transfer order for upgrading account tier from FREE to PREMIUM.
+ *     tags:
+ *       - Payments
  *     security:
  *       - BearerAuth: []
  *     requestBody:
@@ -16,11 +18,30 @@ import { z } from "zod"
  *         application/json:
  *           schema:
  *             type: object
+ *             required:
+ *               - planId
  *             properties:
- *               planId: { type: string }
+ *               planId:
+ *                 type: string
+ *                 enum: [PREMIUM_MONTHLY, PREMIUM_YEARLY]
+ *                 example: "PREMIUM_MONTHLY"
  *     responses:
  *       201:
- *         description: Payment intent initiated
+ *         description: Payment order created successfully.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 orderId: { type: string, format: uuid }
+ *                 amount: { type: integer, example: 99000 }
+ *                 currency: { type: string, example: "VND" }
+ *                 transferContent: { type: string, example: "LUMIS_UPGRADE_USER_123" }
+ *                 qrCodeUrl: { type: string, example: "https://api.vietqr.io/..." }
+ *       400:
+ *         description: Payment initiation failed.
+ *       422:
+ *         description: Validation error.
  */
 const CheckoutSchema = z.object({
   planId: z.enum(["PREMIUM_MONTHLY", "PREMIUM_YEARLY"]),

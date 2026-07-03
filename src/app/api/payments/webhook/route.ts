@@ -6,17 +6,35 @@ import { z } from "zod"
  * @swagger
  * /api/payments/webhook:
  *   post:
- *     summary: Payment Callback Webhook
- *     tags: [Payments]
+ *     summary: Payment Gateway Webhook Callback
+ *     description: >
+ *       Callback endpoint used by banking gateway or payment provider when a bank transfer completes.
+ *       Automatically verifies transaction, upgrades user tier to PREMIUM, and logs payment history.
+ *     tags:
+ *       - Payments
  *     requestBody:
  *       required: true
  *       content:
  *         application/json:
  *           schema:
  *             type: object
+ *             required:
+ *               - transferContent
+ *               - amount
+ *             properties:
+ *               transferContent:
+ *                 type: string
+ *                 example: "LUMIS_UPGRADE_USER_550e8400"
+ *               amount:
+ *                 type: number
+ *                 example: 99000
  *     responses:
  *       200:
- *         description: Webhook received and processed
+ *         description: Webhook received and subscription activated.
+ *       400:
+ *         description: Invalid transaction signature or mismatch.
+ *       422:
+ *         description: Validation error.
  */
 const WebhookSchema = z.object({
   transferContent: z.string().min(1),
