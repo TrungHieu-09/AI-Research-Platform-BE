@@ -7,7 +7,7 @@ import { loginUser } from "@/lib/services/auth-service"
  * /api/auth/login:
  *   post:
  *     summary: User Login
- *     description: Authenticate a user and return a JWT token
+ *     description: Authenticate a user with email and password and return a JWT access token.
  *     tags:
  *       - Authentication
  *     requestBody:
@@ -38,12 +38,28 @@ import { loginUser } from "@/lib/services/auth-service"
  *               properties:
  *                 token:
  *                   type: string
+ *                   example: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
  *                 user:
  *                   type: object
+ *                   properties:
+ *                     id: { type: string, format: uuid }
+ *                     name: { type: string, example: "Nguyen Van A" }
+ *                     email: { type: string, example: "student@fpt.edu.vn" }
+ *                     role: { type: string, enum: [STUDENT, ADMIN], example: "STUDENT" }
+ *                     tier: { type: string, enum: [FREE, PREMIUM], example: "FREE" }
  *       401:
- *         description: Unauthorized
+ *         description: Unauthorized - Invalid credentials or account suspended.
+ *         content:
+ *           application/json:
+ *             example:
+ *               error: "Invalid email or password."
  *       422:
- *         description: Validation error
+ *         description: Validation error.
+ *         content:
+ *           application/json:
+ *             example:
+ *               error:
+ *                 email: ["Invalid email format"]
  */
 export async function POST(req: NextRequest) {
   try {

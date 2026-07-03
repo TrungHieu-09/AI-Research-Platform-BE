@@ -1,191 +1,270 @@
 # REST API Endpoints Specification
 ## Project: Lumis (Academic Document Management & AI Synthesis Platform)
 
-This document provides a comprehensive list of all backend API endpoints required to support the Frontend (FE) UI, following the merged Admin role (the Moderator role has been removed).
+> **Phiên bản:** 2.0 — Cập nhật lần cuối: 2026-07-03  
+> Đã xóa bỏ hoàn toàn vai trò `MODERATOR`. Chỉ còn `STUDENT` và `ADMIN`.
 
 ---
 
 ## 1. Authentication & Users
-APIs for user registration, login, session management, and admin user administration.
 
 ### `POST /api/auth/register`
-- **Description:** Register a new student account.
 - **Access:** Public
 - **Body:** `{ name, email, password }`
-- **Response:** Success message (OTP sent).
+- **Response:** Success (OTP sent to email)
 
 ### `POST /api/auth/verify-otp`
-- **Description:** Verify OTP sent to email and activate account.
 - **Access:** Public
 - **Body:** `{ email, otpCode }`
-- **Response:** User object and JWT access token.
+- **Response:** `{ token, user }`
 
 ### `POST /api/auth/login`
-- **Description:** Traditional email/password login.
 - **Access:** Public
 - **Body:** `{ email, password }`
-- **Response:** User object and JWT access token.
+- **Response:** `{ token, user }`
 
 ### `POST /api/auth/google`
-- **Description:** Login or Register via Google SSO OAuth 2.0 (`@fpt.edu.vn` only).
-- **Access:** Public
-- **Body:** `{ token }`
-- **Response:** User object and JWT access token.
+- **Access:** Public — Chỉ chấp nhận email `@fpt.edu.vn`
+- **Body:** `{ email, name, avatarUrl? }`
+- **Response:** `{ token, user }` (Tự động tạo tài khoản nếu chưa tồn tại)
 
 ### `GET /api/users`
-- **Description:** Fetch list of users.
 - **Access:** Admin
-- **Query Params:** `?page=1&limit=20&role=STUDENT&status=ACTIVE`
-- **Response:** Paginated list of users.
+- **Query:** `?page&limit&role=STUDENT|ADMIN&status=ACTIVE|SUSPENDED`
+- **Response:** Danh sách user + thống kê `_count { documents, chatSessions }`
 
 ### `PUT /api/users/[id]`
-- **Description:** Update user status or role.
 - **Access:** Admin
-- **Body:** `{ role, status }`
-- **Response:** Updated user metadata.
+- **Body:** `{ role?, status?, tier? }`
+- **Response:** Updated user (Tự chặn Admin tự xóa/hạ quyền chính mình)
 
 ---
 
 ## 2. Documents
-APIs for managing the lifecycle of documents from upload, moderation, retrieval, to deletion.
 
 ### `POST /api/documents/upload-url`
-- **Description:** Request a presigned URL to upload a file directly to Cloud Storage, or perform instant deduplication if `fileHash` exists.
 - **Access:** Student, Admin
-- **Body:** `{ fileHash, fileSize, mimeType }`
-- **Response:** Presigned URL & Document ID (if new) OR 200 OK (if deduplicated).
+- **Body:** `{ filename, mimeType, fileSize, fileHash? }`
+- **Response (mới):** `{ deduplicated: false, uploadUrl, fileUrl, key }` hoặc `{ deduplicated: true, fileUrl }` (nếu file đã tồn tại — tiết kiệm storage)
 
 ### `POST /api/documents`
-- **Description:** Create document metadata after successful file upload.
 - **Access:** Student, Admin
-- **Body:** `{ title, description, subjectId, visibility, fileUrl, fileHash, fileSize, mimeType, pageCount }`
-- **Response:** Created document record (Status: `PENDING` if public).
+- **Body:** `{ title, description?, subjectId, visibility, fileUrl, fileHash, fileSize, mimeType, pageCount }`
+- **Auto-logic:** `PRIVATE` → status `APPROVED` ngay; `PUBLIC` → status `PENDING` chờ Admin duyệt
 
 ### `GET /api/documents`
-- **Description:** Fetch documents based on visibility, status, or owner.
-- **Access:** Guest (Public/Approved only), Student, Admin
-- **Query Params:** `?subjectId=...&status=APPROVED&search=...&page=1`
-- **Response:** Paginated documents.
+- **Access:** Public (chỉ APPROVED+PUBLIC), Student/Admin (thêm PRIVATE của mình)
+- **Query:** `?subjectId&status&search&page&pageSize&visibility`
+- **Response:** Paginated documents
 
 ### `GET /api/documents/[id]`
-- **Description:** Fetch details of a specific document (including its subject, owner, status).
-- **Access:** Student, Admin (or Guest if PUBLIC & APPROVED).
-- **Response:** Document details.
+- **Access:** Public (nếu APPROVED+PUBLIC), Student/Admin
+- **Side-effect:** Tự động ghi `document_views` mỗi lần xem
 
 ### `POST /api/documents/[id]/moderate`
-- **Description:** Approve or reject a pending public document.
 - **Access:** Admin
-- **Body:** `{ action: "APPROVED" | "REJECTED", rejectionReason? }`
-- **Response:** Success confirmation.
+- **Body:** `{ decision: "APPROVED"|"REJECTED", rejectionReason? }` *(hoặc dùng key `status` thay `decision` — cả hai đều được nhận)*
+- **Side-effect:** Ghi `audit_logs`
 
 ### `DELETE /api/documents/[id]`
-- **Description:** Soft-delete a document.
-- **Access:** Owner, Admin
-- **Response:** Success confirmation.
+- **Access:** Owner hoặc Admin
+- **Action:** Soft delete (set `deletedAt`)
 
 ### `POST /api/documents/[id]/restore`
-- **Description:** Restore a soft-deleted document (within 30 days).
-- **Access:** Owner, Admin
-- **Response:** Restored document metadata.
+- **Access:** Owner hoặc Admin
+- **Action:** Xóa `deletedAt` (chỉ hoạt động trong vòng 30 ngày — đọc từ `system_configs`)
 
 ### `DELETE /api/admin/documents/[id]/hard`
-- **Description:** Permanently delete a document.
-- **Access:** Admin
-- **Response:** Success confirmation.
+- **Access:** Admin only
+- **Action:** Hard delete (xóa DB + Cloud Storage)
 
 ### `GET /api/documents/[id]/audit`
-- **Description:** Fetch audit logs related to this document (views, downloads, edits).
 - **Access:** Admin
-- **Response:** List of audit records.
+- **Response:** Audit logs liên quan đến tài liệu
 
 ---
 
-## 3. Subjects (Tags)
-APIs to manage the static list of subjects categorizing the documents.
+## 3. Document Interactions (Tương tác Tài liệu)
+
+### `POST /api/documents/[id]/ratings`
+- **Access:** Student, Admin
+- **Body:** `{ rating: 1-5, comment? }`
+- **Response:** Rating record (Unique: 1 rating/user/tài liệu)
+
+### `PUT /api/documents/[id]/ratings`
+- **Access:** Owner of rating
+- **Body:** `{ rating, comment? }`
+- **Response:** Updated rating
+
+### `GET /api/documents/[id]/ratings`
+- **Access:** Public
+- **Response:** `{ average, total, items[] }`
+
+### `POST /api/bookmarks/[documentId]`
+- **Access:** Student, Admin
+- **Response:** Bookmark record
+
+### `DELETE /api/bookmarks/[documentId]`
+- **Access:** Owner
+- **Response:** 204 No Content
+
+### `GET /api/bookmarks`
+- **Access:** Student, Admin
+- **Response:** Danh sách tài liệu đã lưu của user hiện tại
+
+### `POST /api/documents/[id]/share`
+- **Access:** Owner
+- **Body:** `{ sharedWith: userId, permission: "view"|"comment"|"edit" }`
+- **Response:** DocumentShare record
+
+---
+
+## 4. Subjects (Môn học)
 
 ### `GET /api/subjects`
-- **Description:** Fetch list of active subjects.
 - **Access:** Public
-- **Response:** List of subjects.
+- **Query:** `?search&status`
+- **Response:** Danh sách subjects
 
 ### `POST /api/subjects`
-- **Description:** Create a new subject category.
 - **Access:** Admin
 - **Body:** `{ name, code }`
-- **Response:** Created subject record.
+- **Side-effect:** Ghi `audit_logs`
 
 ### `PUT /api/subjects/[id]`
-- **Description:** Update subject metadata (e.g., name, code, status).
 - **Access:** Admin
-- **Body:** `{ name, code, status }`
-- **Response:** Updated subject record.
+- **Body:** `{ name?, code?, status? }`
+- **Side-effect:** Ghi `audit_logs`
 
 ### `DELETE /api/subjects/[id]`
-- **Description:** Disable/remove a subject.
 - **Access:** Admin
-- **Response:** Success confirmation.
+- **Action:** Soft suspend (status → SUSPENDED)
+- **Side-effect:** Ghi `audit_logs`
 
 ### `POST /api/subjects/suggest`
-- **Description:** Student proposes a new subject/tag.
 - **Access:** Student
 - **Body:** `{ name }`
-- **Response:** Success confirmation (status: PENDING).
 
 ### `GET /api/subjects/suggest`
-- **Description:** View pending subject suggestions.
 - **Access:** Admin
-- **Response:** List of suggestions.
+- **Response:** Danh sách đề xuất PENDING
 
 ### `POST /api/subjects/suggest/[id]/moderate`
-- **Description:** Approve or reject a subject suggestion.
 - **Access:** Admin
-- **Body:** `{ action: "APPROVED" | "REJECTED" }`
-- **Response:** Success confirmation.
+- **Body:** `{ action: "APPROVED"|"REJECTED" }`
 
 ---
 
-## 4. AI Chatbot & RAG
-APIs for interacting with the generative AI using semantic vector search on documents.
+## 5. Collections & Tags
+
+### `GET /api/collections`
+- **Access:** Student, Admin
+- **Response:** Danh sách collection của user hiện tại
+
+### `POST /api/collections`
+- **Access:** Student, Admin
+- **Body:** `{ name }`
+
+### `POST /api/collections/[id]/documents`
+- **Access:** Owner
+- **Body:** `{ documentId }`
+
+### `DELETE /api/collections/[id]/documents/[documentId]`
+- **Access:** Owner
+
+---
+
+## 6. AI Chatbot & RAG
 
 ### `POST /api/ai/chat`
-- **Description:** Start or continue a chat session with the AI. Includes streaming context from documents.
 - **Access:** Student, Admin
-- **Body:** `{ message, sessionId, documentId?, scope }`
-- **Response:** JSON response stream (SSE or similar) containing `{ answer, citations }`.
+- **Body:** `{ message, sessionId?, documentId?, scope: "SINGLE_DOCUMENT"|"SUBJECT"|"GLOBAL" }`
+- **Flow:**
+  1. Kiểm tra `ai_usage_logs` — nếu đạt giới hạn ngày (đọc từ `system_configs`) → `429 Too Many Requests`
+  2. Kiểm tra `ai_cache` — nếu cache hit → trả về ngay (không gọi OpenAI)
+  3. Gọi n8n Webhook RAG → nhận `{ answer, citations }`
+  4. Lưu `chat_messages`, `citations`, `ai_usage_logs`, `ai_cache`
+- **Response:** `{ answer, citations[], sessionId }`
 
 ### `GET /api/ai/limit`
-- **Description:** Check the user's remaining daily query tokens.
 - **Access:** Student, Admin
-- **Response:** `{ queriesToday, limit, tier }`.
+- **Response:** `{ usedToday, limit, tier, remaining }`
 
 ### `GET /api/ai/sessions`
-- **Description:** Fetch user's previous chat sessions history.
-- **Access:** Student, Admin (Owner only)
-- **Response:** List of sessions.
+- **Access:** Student, Admin
+- **Response:** Danh sách chat sessions của user
 
 ### `GET /api/ai/sessions/[sessionId]/messages`
-- **Description:** Fetch message history for a specific chat session.
-- **Access:** Student, Admin (Owner only)
-- **Response:** List of chat messages with citations.
+- **Access:** Owner
+- **Response:** Lịch sử tin nhắn + citations
 
 ---
 
-## 5. Payments & Subscriptions
-APIs for handling premium tier upgrades.
+## 7. Admin Settings (System Configs)
+
+### `GET /api/admin/configs`
+- **Access:** Admin
+- **Response:** Toàn bộ cấu hình hệ thống
+
+### `PUT /api/admin/configs/[key]`
+- **Access:** Admin
+- **Body:** `{ value }`
+- **Response:** Updated config (Thay đổi có hiệu lực ngay, không cần redeploy)
+
+---
+
+## 8. Analytics Dashboard
+
+### `GET /api/admin/stats`
+- **Access:** Admin
+- **Response:**
+  ```json
+  {
+    "totalUsers": 0,
+    "totalDocuments": 0,
+    "pendingModeration": 0,
+    "totalViews": 0,
+    "aiUsageToday": 0,
+    "topDocuments": [],
+    "newUsersThisWeek": 0
+  }
+  ```
+
+### `GET /api/admin/stats/documents`
+- **Access:** Admin
+- **Query:** `?from&to&subjectId`
+- **Response:** Document views theo ngày (dùng bảng `document_views`)
+
+---
+
+## 9. Notifications
+
+### `GET /api/notifications`
+- **Access:** Student, Admin
+- **Response:** Danh sách thông báo chưa đọc/đã đọc
+
+### `PUT /api/notifications/[id]/read`
+- **Access:** Owner
+- **Response:** 200 OK
+
+### `PUT /api/notifications/read-all`
+- **Access:** Student, Admin
+- **Response:** 200 OK
+
+---
+
+## 10. Payments & Subscriptions
 
 ### `POST /api/payments/checkout`
-- **Description:** Initiate an order transaction receipt for upgrading to Premium tier.
 - **Access:** Student
-- **Body:** `{ planId, referenceCode }`
-- **Response:** Transaction receipt details and VietQR/Bank template info.
+- **Body:** `{ planId }`
+- **Response:** Thông tin chuyển khoản + VietQR template
 
 ### `POST /api/payments/webhook`
-- **Description:** Callback verification webhook from Bank API (or automated checking service) to confirm payment.
-- **Access:** Service / System
+- **Access:** System/Service
 - **Body:** `{ transferContent, amount, status }`
-- **Response:** `200 OK` (updates User Tier internally).
+- **Side-effect:** Nâng tier user lên PREMIUM nếu thanh toán thành công
 
 ### `GET /api/payments/receipts`
-- **Description:** Fetch user payment receipts.
 - **Access:** Student, Admin
-- **Response:** List of receipts.
+- **Response:** Lịch sử giao dịch của user

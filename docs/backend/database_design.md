@@ -1,7 +1,8 @@
 # Database Schema & Entity Relationship Design
 ## Project: Lumis (Academic Document Management & AI Synthesis Platform)
 
-This document defines the database architecture for the Lumis application. The design uses a relational model suited for **PostgreSQL** (due to **pgvector** support for embedding RAG chunks). It specifies entities, relationships, validation constraints, and includes a production-grade **Prisma Schema**.
+> **Phiên bản Schema:** 2.0 — Cập nhật lần cuối: 2026-07-03  
+> Thiết kế dùng **PostgreSQL** + **pgvector** (Supabase hosted). Prisma v5.22.0.
 
 ---
 
@@ -14,400 +15,153 @@ erDiagram
     User ||--o{ ChatSession : "conducts"
     User ||--o{ PaymentReceipt : "makes"
     User ||--o{ AuditLog : "triggers"
-    
-    Subject ||--o{ Document : "groups"
+    User ||--o{ Bookmark : "saves"
+    User ||--o{ DocumentShare : "shares (SharedBy)"
+    User ||--o{ DocumentShare : "receives (SharedWith)"
+    User ||--o{ Collection : "creates"
+    User ||--o{ Notification : "receives"
+    User ||--o{ DocumentView : "views"
+    User ||--o{ AiUsageLog : "consumes"
+    User ||--o{ DocumentRating : "rates"
+
+    Subject ||--o{ Document : "categorizes"
     Subject ||--o{ ChatSession : "contextualizes"
+    Subject ||--o{ SubjectSuggestion : "linked_to"
 
     Document ||--o{ DocumentChunk : "contains"
     Document ||--o{ ChatSession : "supports"
     Document ||--o{ Citation : "referenced_in"
     Document ||--o{ AuditLog : "audited"
+    Document ||--o{ Tag : "tagged_with"
+    Document ||--o{ Bookmark : "bookmarked_by"
+    Document ||--o{ DocumentShare : "shared_via"
+    Document ||--o{ CollectionDocument : "in_collections"
+    Document ||--o{ DocumentView : "tracked_by"
+    Document ||--o{ DocumentRating : "rated_by"
+    Document ||--o{ AiCache : "cached_for"
 
     ChatSession ||--o{ ChatMessage : "has"
     ChatMessage ||--o{ Citation : "cites"
 
-    class User {
-        uuid id PK
-        string name
-        string email UK
-        string passwordHash
-        string role "STUDENT | ADMIN"
-        string status "ACTIVE | SUSPENDED"
-        string tier "FREE | PREMIUM"
-        datetime createdAt
-        datetime updatedAt
-    }
-
-    class OneTimePassword {
-        uuid id PK
-        string email
-        string otpCode
-        datetime expiresAt
-        int attempts
-        datetime createdAt
-    }
-
-    class Subject {
-        uuid id PK
-        string name
-        string code UK "e.g., CS301"
-        string status "ACTIVE | INACTIVE"
-        datetime createdAt
-        datetime updatedAt
-    }
-
-    class SubjectSuggestion {
-        uuid id PK
-        string name
-        string status "PENDING | APPROVED | REJECTED"
-        uuid proposedById FK
-        datetime createdAt
-        datetime updatedAt
-    }
-
-    class Document {
-        uuid id PK
-        string title
-        string description
-        string fileUrl
-        string fileHash
-        int fileSize
-        string mimeType
-        string visibility "PRIVATE | PUBLIC"
-        string status "PENDING | APPROVED | REJECTED"
-        string rejectionReason
-        int pageCount
-        uuid ownerId FK
-        uuid subjectId FK
-        uuid moderatedById FK
-        datetime moderatedAt
-        datetime createdAt
-        datetime updatedAt
-        datetime deletedAt "Soft Delete"
-    }
-
-    class DocumentChunk {
-        uuid id PK
-        uuid documentId FK
-        int chunkIndex
-        int pageNumber
-        string content
-        vector embedding "pgvector size"
-        datetime createdAt
-    }
-
-    class ChatSession {
-        uuid id PK
-        string title
-        uuid userId FK
-        uuid documentId FK "Optional"
-        uuid subjectId FK "Optional"
-        string scope "SINGLE | SUBJECT | GLOBAL"
-        datetime createdAt
-        datetime updatedAt
-    }
-
-    class ChatMessage {
-        uuid id PK
-        uuid sessionId FK
-        string sender "USER | AI"
-        string message
-        datetime createdAt
-    }
-
-    class Citation {
-        uuid id PK
-        uuid messageId FK
-        uuid documentId FK
-        int pageNumber
-        int paragraphIndex
-        string textExcerpt
-        datetime createdAt
-    }
-
-    class PaymentReceipt {
-        uuid id PK
-        uuid userId FK
-        string planId
-        decimal amount
-        string transferContent UK
-        string status "PENDING | COMPLETED | FAILED"
-        datetime createdAt
-        datetime verifiedAt
-    }
-
-    class AuditLog {
-        uuid id PK
-        uuid userId FK
-        string action
-        string targetEntity
-        string targetId
-        string ipAddress
-        datetime createdAt
-    }
+    Collection ||--o{ CollectionDocument : "contains"
 ```
 
 ---
 
-## 2. Table Schemas & Validation Constraints
+## 2. Danh sách Bảng & Mô tả
 
-### User Table (`users`)
-Tracks registered users and active billing packages.
-* **Fields**:
-  * `id`: `UUID` (Primary Key, unique generation)
-  * `email`: `VARCHAR(255)` (Unique index, must validate format pattern `@fpt.edu.vn` at application level)
-  * `role`: `ENUM('STUDENT', 'ADMIN')` (Default: `'STUDENT'`)
-  * `status`: `ENUM('ACTIVE', 'SUSPENDED')` (Default: `'ACTIVE'`)
-  * `tier`: `ENUM('FREE', 'PREMIUM')` (Default: `'FREE'`)
-* **Indexes**: Unique index on `email` to prevent duplication audits.
+### Nhóm 1: Authentication
+| Bảng | Mô tả |
+|:---|:---|
+| `users` | Tài khoản người dùng (Student / Admin). Hỗ trợ cả Password và Google SSO (`passwordHash` nullable). |
+| `one_time_passwords` | Mã OTP xác thực email khi đăng ký. Hết hạn sau 10 phút, giới hạn 3 lần thử. |
 
-### OneTimePassword Table (`one_time_passwords`)
-Used to manage multi-factor email verification screens to block registration spam.
-* **Fields**:
-  * `email`: `VARCHAR(255)` (Non-unique, multiple attempts logged)
-  * `otpCode`: `VARCHAR(6)`
-  * `expiresAt`: `TIMESTAMP` (Should expire after 10 minutes)
-  * `attempts`: `INT` (Max limit of 3 tries for safety validation)
+### Nhóm 2: Tài liệu (Documents)
+| Bảng | Mô tả |
+|:---|:---|
+| `documents` | Metadata tài liệu. Hỗ trợ soft delete (`deletedAt`), deduplication (`fileHash`), moderation workflow. Thêm `thumbnailUrl` cho Guest preview. |
+| `document_chunks` | Đoạn văn bản cắt nhỏ từ file + vector embedding `vector(1536)` cho RAG semantic search. |
+| `document_views` | Ghi nhận mỗi lượt xem tài liệu (cả Guest và Student). Phục vụ Dashboard thống kê Admin. |
+| `document_ratings` | Đánh giá tài liệu 1-5 sao + bình luận. Mỗi user chỉ đánh giá 1 lần/tài liệu. |
+| `document_shares` | Chia sẻ tài liệu riêng tư giữa 2 user cụ thể với mức quyền: `view / comment / edit`. |
 
-### Document Table (`documents`)
-Stores document metadata, ownership, soft-delete details, and file hashes to support the automatic deduplication engine.
-* **Fields**:
-  * `fileHash`: `VARCHAR(64)` (SHA-256 value of file contents for comparison)
-  * `deletedAt`: `TIMESTAMP NULL` (Null represents active document, timestamp populated represents soft-deleted state)
-  * `status`: `ENUM('PENDING', 'APPROVED', 'REJECTED')` (Default: `'PENDING'` for Public uploads)
-  * `visibility`: `ENUM('PRIVATE', 'PUBLIC')` (Private files bypass moderation approval workflow)
-* **Indexes**: Composite Index `(id, status, deletedAt)` for faster filtering of approved files.
+### Nhóm 3: Môn học (Subjects)
+| Bảng | Mô tả |
+|:---|:---|
+| `subjects` | Danh sách môn học do Admin quản lý (mã `code` là duy nhất). |
+| `subject_suggestions` | Đề xuất môn học mới từ sinh viên, chờ Admin duyệt. |
+| `tags` | Tag tự do gắn vào tài liệu (nhiều-nhiều với `documents`). |
 
-### Document Chunks Table (`document_chunks`)
-Stores text slices with their associated AI dense vector embeddings to fuel semantic searches.
-* **Fields**:
-  * `embedding`: `VECTOR(1536)` (Optimized for OpenAI embedding models, pgvector enabled)
-* **Indexes**: HNSW Index on `embedding` for cosine distance queries.
+### Nhóm 4: AI Chat & RAG
+| Bảng | Mô tả |
+|:---|:---|
+| `chat_sessions` | Phiên chat AI. Hỗ trợ 3 scope: `SINGLE_DOCUMENT / SUBJECT / GLOBAL`. |
+| `chat_messages` | Lịch sử tin nhắn trong từng phiên chat. |
+| `citations` | Trích dẫn nguồn đoạn văn bản cụ thể AI dùng để trả lời (trang + đoạn). |
+| `ai_usage_logs` | Ghi nhận mỗi lượt gọi AI (tokens in/out). Phục vụ rate limit Free=10/ngày, Premium=50/ngày. |
+| `ai_cache` | Cache câu trả lời AI theo `queryHash`. Hết hạn sau số ngày cấu hình trong `system_configs`. Tiết kiệm chi phí OpenAI. |
+
+### Nhóm 5: Tổ chức cá nhân
+| Bảng | Mô tả |
+|:---|:---|
+| `bookmarks` | Sinh viên lưu tài liệu yêu thích. Unique constraint `(userId, documentId)`. |
+| `collections` | Bộ sưu tập tài liệu cá nhân do người dùng tự đặt tên. |
+| `collection_documents` | Bảng liên kết nhiều-nhiều giữa `collections` và `documents`. |
+
+### Nhóm 6: Hệ thống & Vận hành
+| Bảng | Mô tả |
+|:---|:---|
+| `system_configs` | Cấu hình hệ thống động do Admin chỉnh sửa qua UI (không cần redeploy). VD: giới hạn file, rate limit AI. |
+| `audit_logs` | Nhật ký hành động Admin (moderation, thay đổi quyền, xóa dữ liệu, v.v.). |
+| `notifications` | Thông báo in-app gửi đến người dùng (tài liệu được duyệt/từ chối, v.v.). |
+| `payment_receipts` | Lịch sử giao dịch thanh toán nâng cấp tài khoản lên Premium. |
 
 ---
 
-## 3. Prisma Schema Template
+## 3. Chi tiết Bảng Quan Trọng
 
-Developers can drop this schema config directly into `prisma/schema.prisma` inside the Next.js service repository:
+### `system_configs` — Cấu hình Admin không cần redeploy
+| Key | Giá trị mặc định | Mô tả |
+|:---|:---:|:---|
+| `max_file_size_mb` | `50` | Dung lượng file tối đa (MB) |
+| `allowed_mime_types` | `[pdf, docx, txt, png, jpg]` | Định dạng file được phép upload |
+| `free_ai_limit_per_day` | `10` | Giới hạn lượt AI/ngày cho tài khoản Free |
+| `premium_ai_limit_per_day` | `50` | Giới hạn lượt AI/ngày cho tài khoản Premium |
+| `ai_cache_ttl_days` | `7` | Số ngày cache câu trả lời AI |
+| `soft_delete_retention_days` | `30` | Số ngày giữ file đã xóa mềm trước khi hard delete |
+| `max_uploads_per_day` | `20` | Số file upload tối đa/ngày/user |
 
-```prisma
-datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
-}
+### `document_chunks` — Vector Store cho RAG
+- **`embedding`**: kiểu `vector(1536)` (Unsupported trong Prisma, tạo qua raw SQL)
+- **Index**: HNSW cosine distance (`document_chunks_embedding_idx`)
+- **Metadata**: JSON chứa `{ documentId, pageNumber, chunkIndex }` phục vụ n8n Supabase Vector Store node
 
-generator client {
-  provider = "prisma-client-js"
-}
+### `ai_cache` — Tiết kiệm chi phí OpenAI
+- **`queryHash`**: SHA-256 của `(documentId + normalized_question)` — unique key
+- **`expiresAt`**: Timestamp hết hạn cache, đọc từ `system_configs.ai_cache_ttl_days`
+- **`hitCount`**: Số lần cache được tái sử dụng (metric cho Admin dashboard)
 
-enum Role {
-  STUDENT
-  ADMIN
-}
+---
 
-enum AccountStatus {
-  ACTIVE
-  SUSPENDED
-}
+## 4. Các chỉ số Index quan trọng
 
-enum AccountTier {
-  FREE
-  PREMIUM
-}
+| Bảng | Columns được Index | Mục đích |
+|:---|:---|:---|
+| `documents` | `(status, deletedAt)` | Lọc tài liệu APPROVED chưa xóa nhanh |
+| `document_chunks` | `embedding` (HNSW) | Vector similarity search cho RAG |
+| `document_views` | `(documentId, viewedAt)`, `(userId, viewedAt)` | Dashboard thống kê theo ngày |
+| `ai_usage_logs` | `(userId, usedAt)` | Đếm số lượt dùng AI trong ngày |
+| `ai_cache` | `queryHash` (unique), `(documentId)`, `(expiresAt)` | Lookup cache nhanh + dọn cache hết hạn |
+| `document_ratings` | `(documentId, userId)` unique | 1 rating/user/tài liệu |
 
-enum DocumentVisibility {
-  PRIVATE
-  PUBLIC
-}
+---
 
-enum ModerationStatus {
-  PENDING
-  APPROVED
-  REJECTED
-}
+## 5. Sơ đồ Vòng đời Tài liệu (Document Lifecycle)
 
-enum ChatScope {
-  SINGLE_DOCUMENT
-  SUBJECT
-  GLOBAL
-}
+```
+[Upload] → PRIVATE → APPROVED (auto, dùng AI ngay)
+         → PUBLIC  → PENDING → APPROVED (Admin duyệt, hiển thị toàn trường)
+                             → REJECTED (Admin từ chối + lý do)
 
-enum SenderType {
-  USER
-  AI
-}
+[Xóa] → deletedAt set (Soft Delete, ẩn khỏi UI)
+       → Sau 30 ngày (system_configs.soft_delete_retention_days)
+       → Cron Job Hard Delete (xóa file khỏi Cloud Storage)
+```
 
-enum PaymentStatus {
-  PENDING
-  COMPLETED
-  FAILED
-}
+---
 
-model User {
-  id                 String              @id @default(uuid()) @db.Uuid
-  name               String
-  email              String              @unique
-  passwordHash       String
-  role               Role                @default(STUDENT)
-  status             AccountStatus       @default(ACTIVE)
-  tier               AccountTier         @default(FREE)
-  createdAt          DateTime            @default(now())
-  updatedAt          DateTime            @updatedAt
-  documents          Document[]          @relation("UserDocuments")
-  moderatedDocs      Document[]          @relation("ModeratedDocuments")
-  subjectSuggestions SubjectSuggestion[]
-  chatSessions       ChatSession[]
-  paymentReceipts    PaymentReceipt[]
-  auditLogs          AuditLog[]
+## 6. Lệnh Setup Database
 
-  @@map("users")
-}
+```bash
+# Bật pgvector + thêm cột embedding (chạy 1 lần duy nhất trên DB mới)
+node src/scripts/setup-vector.js
 
-model OneTimePassword {
-  id        String   @id @default(uuid()) @db.Uuid
-  email     String
-  otpCode   String
-  expiresAt DateTime
-  attempts  Int      @default(0)
-  createdAt DateTime @default(now())
+# Sync toàn bộ schema lên Supabase
+npx prisma db push
 
-  @@map("one_time_passwords")
-}
+# Generate Prisma Client sau khi thay đổi schema
+npx prisma generate
 
-model Subject {
-  id           String        @id @default(uuid()) @db.Uuid
-  name         String
-  code         String        @unique
-  status       AccountStatus @default(ACTIVE)
-  createdAt    DateTime      @default(now())
-  updatedAt    DateTime      @updatedAt
-  documents    Document[]
-  chatSessions ChatSession[]
-
-  @@map("subjects")
-}
-
-model SubjectSuggestion {
-  id           String           @id @default(uuid()) @db.Uuid
-  name         String
-  status       ModerationStatus @default(PENDING)
-  proposedById String           @db.Uuid
-  proposedBy   User             @relation(fields: [proposedById], references: [id])
-  createdAt    DateTime         @default(now())
-  updatedAt    DateTime         @updatedAt
-
-  @@map("subject_suggestions")
-}
-
-model Document {
-  id               String             @id @default(uuid()) @db.Uuid
-  title            String
-  description      String?            @db.Text
-  fileUrl          String
-  fileHash         String
-  fileSize         Int
-  mimeType         String
-  visibility       DocumentVisibility @default(PRIVATE)
-  status           ModerationStatus   @default(PENDING)
-  rejectionReason  String?            @db.Text
-  pageCount        Int
-  ownerId          String             @db.Uuid
-  owner            User               @relation("UserDocuments", fields: [ownerId], references: [id])
-  subjectId        String             @db.Uuid
-  subject          Subject            @relation(fields: [subjectId], references: [id])
-  moderatedById    String?            @db.Uuid
-  moderatedBy      User?              @relation("ModeratedDocuments", fields: [moderatedById], references: [id])
-  moderatedAt      DateTime?
-  createdAt        DateTime           @default(now())
-  updatedAt        DateTime           @updatedAt
-  deletedAt        DateTime?          // Soft delete column
-  chunks           DocumentChunk[]
-  chatSessions     ChatSession[]
-  citations        Citation[]
-
-  @@index([status, deletedAt])
-  @@map("documents")
-}
-
-model DocumentChunk {
-  id          String   @id @default(uuid()) @db.Uuid
-  documentId  String   @db.Uuid
-  document    Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
-  chunkIndex  Int
-  pageNumber  Int
-  content     String   @db.Text
-  createdAt   DateTime @default(now())
-
-  @@map("document_chunks")
-}
-
-model ChatSession {
-  id         String        @id @default(uuid()) @db.Uuid
-  title      String?
-  userId     String        @db.Uuid
-  user       User          @relation(fields: [userId], references: [id])
-  documentId String?       @db.Uuid
-  document   Document?     @relation(fields: [documentId], references: [id])
-  subjectId  String?       @db.Uuid
-  subject    Subject?      @relation(fields: [subjectId], references: [id])
-  scope      ChatScope     @default(SINGLE_DOCUMENT)
-  createdAt  DateTime      @default(now())
-  updatedAt  DateTime      @updatedAt
-  messages   ChatMessage[]
-
-  @@map("chat_sessions")
-}
-
-model ChatMessage {
-  id        String     @id @default(uuid()) @db.Uuid
-  sessionId String     @db.Uuid
-  session   ChatSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
-  sender    SenderType
-  message   String     @db.Text
-  createdAt DateTime   @default(now())
-  citations Citation[]
-
-  @@map("chat_messages")
-}
-
-model Citation {
-  id              String      @id @default(uuid()) @db.Uuid
-  messageId       String      @db.Uuid
-  message         ChatMessage @relation(fields: [messageId], references: [id], onDelete: Cascade)
-  documentId      String      @db.Uuid
-  document        Document    @relation(fields: [documentId], references: [id])
-  pageNumber      Int
-  paragraphIndex  Int?
-  textExcerpt     String      @db.Text
-  createdAt       DateTime    @default(now())
-
-  @@map("citations")
-}
-
-model PaymentReceipt {
-  id              String        @id @default(uuid()) @db.Uuid
-  userId          String        @db.Uuid
-  user            User          @relation(fields: [userId], references: [id])
-  planId          String
-  amount          Decimal       @db.Decimal(10, 2)
-  transferContent String        @unique
-  status          PaymentStatus @default(PENDING)
-  createdAt       DateTime      @default(now())
-  verifiedAt      DateTime?
-
-  @@map("payment_receipts")
-}
-
-model AuditLog {
-  id           String    @id @default(uuid()) @db.Uuid
-  userId       String?   @db.Uuid
-  user         User?     @relation(fields: [userId], references: [id])
-  action       String
-  targetEntity String
-  targetId     String?
-  ipAddress    String?
-  createdAt    DateTime  @default(now())
-
-  @@map("audit_logs")
-}
+# Seed dữ liệu mặc định cho system_configs
+node prisma/seed.js
 ```

@@ -7,7 +7,7 @@ import { registerUser } from "@/lib/services/auth-service"
  * /api/auth/register:
  *   post:
  *     summary: User Registration
- *     description: Register a new user and trigger an OTP email
+ *     description: Register a new student account and trigger an OTP verification email. Account starts in SUSPENDED status until OTP is verified.
  *     tags:
  *       - Authentication
  *     requestBody:
@@ -23,6 +23,7 @@ import { registerUser } from "@/lib/services/auth-service"
  *             properties:
  *               name:
  *                 type: string
+ *                 minLength: 2
  *                 example: "Nguyen Van A"
  *               email:
  *                 type: string
@@ -31,14 +32,28 @@ import { registerUser } from "@/lib/services/auth-service"
  *               password:
  *                 type: string
  *                 format: password
+ *                 minLength: 6
  *                 example: "password123"
  *     responses:
  *       201:
- *         description: Registration initiated, OTP sent
+ *         description: Registration initiated successfully. OTP verification code sent to email.
+ *         content:
+ *           application/json:
+ *             example:
+ *               message: "Registration initiated. Please verify your email with the OTP sent."
  *       400:
- *         description: Registration failed
+ *         description: Registration failed (e.g. email already exists or SMTP failure).
+ *         content:
+ *           application/json:
+ *             example:
+ *               error: "An account with this email already exists."
  *       422:
- *         description: Validation error
+ *         description: Validation error.
+ *         content:
+ *           application/json:
+ *             example:
+ *               error:
+ *                 email: ["Invalid email format"]
  */
 export async function POST(req: NextRequest) {
   try {
