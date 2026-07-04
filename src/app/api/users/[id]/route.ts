@@ -5,16 +5,20 @@ import { db } from "@/lib/db"
  * @swagger
  * /api/users/{id}:
  *   put:
- *     summary: Update user status or role (Admin only)
- *     description: Allow admin to suspend/activate accounts or elevate roles
+ *     summary: Update user status, role, or tier (Admin only)
+ *     description: Allow admin to suspend/activate accounts, elevate roles, or upgrade account tiers. Prevent admin from self-demotion or self-suspension.
  *     tags:
  *       - Users
+ *     security:
+ *       - BearerAuth: []
  *     parameters:
  *       - in: path
  *         name: id
  *         required: true
  *         schema:
  *           type: string
+ *           format: uuid
+ *         description: Target User ID (UUID).
  *     requestBody:
  *       required: true
  *       content:
@@ -30,14 +34,31 @@ import { db } from "@/lib/db"
  *                 enum: [ACTIVE, SUSPENDED]
  *               tier:
  *                 type: string
- *                 enum: [FREE, PRO]
+ *                 enum: [FREE, PREMIUM]
  *     responses:
  *       200:
- *         description: User updated successfully
+ *         description: User updated successfully.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 user:
+ *                   type: object
+ *                   properties:
+ *                     id: { type: string, format: uuid }
+ *                     name: { type: string }
+ *                     email: { type: string }
+ *                     role: { type: string, enum: [STUDENT, ADMIN] }
+ *                     status: { type: string, enum: [ACTIVE, SUSPENDED] }
+ *                     tier: { type: string, enum: [FREE, PREMIUM] }
+ *                     updatedAt: { type: string, format: date-time }
+ *       400:
+ *         description: Bad request (e.g. attempting to demote/suspend self).
  *       403:
- *         description: Forbidden
+ *         description: Access denied (Admin role required).
  *       404:
- *         description: User not found
+ *         description: User not found.
  */
 export async function PUT(req: NextRequest, { params }: { params: { id: string } }) {
   try {
@@ -64,7 +85,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
     const updateData: any = {}
     if (role && (role === "STUDENT" || role === "ADMIN")) updateData.role = role
     if (status && (status === "ACTIVE" || status === "SUSPENDED")) updateData.status = status
-    if (tier && (tier === "FREE" || tier === "PRO")) updateData.tier = tier
+    if (tier && (tier === "FREE" || tier === "PREMIUM")) updateData.tier = tier
 
     const updatedUser = await db.user.update({
       where: { id: params.id },

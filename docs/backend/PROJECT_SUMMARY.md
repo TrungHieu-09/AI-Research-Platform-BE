@@ -1,59 +1,145 @@
 # TỔNG HỢP TIẾN ĐỘ VÀ KIẾN TRÚC HỆ THỐNG LUMIS
 **Dự án:** Nền tảng Quản lý Tài liệu Học thuật & Tổng hợp Kiến thức bằng AI (FPT University)  
-**Tình trạng cập nhật:** Hoàn thiện Giai đoạn 1, 2, 3 (Core Backend & RBAC Architecture)
+**Cập nhật lần cuối:** 2026-07-03 — Schema v2.0, 21 bảng
 
 ---
 
-## 🏗️ 1. Cải tổ Kiến trúc Phân quyền (RBAC Refactor)
-- **Loại bỏ hoàn toàn vai trò `MODERATOR`:** Đã tiến hành quét và xóa bỏ role `MODERATOR` khỏi toàn bộ hệ thống (tài liệu Business Analysis, bảng phân quyền API, và mã nguồn Backend).
-- **Quyền hạn gộp vào `ADMIN`:** Quản trị viên (`ADMIN`) hiện nắm giữ toàn quyền quản lý hệ thống, bao gồm kiểm duyệt tài liệu (`/moderate`), đề xuất môn học (`/suggest`), và quản lý người dùng (`/users`).
-- **Tối ưu Middleware (`BE/src/middleware.ts`):** Chuẩn hóa cấu trúc phân cấp `ROLE_HIERARCHY` (Chỉ còn `STUDENT` và `ADMIN`). Tự động bảo vệ các API riêng tư và inject headers `x-user-id`, `x-user-role` định danh người dùng cho các route phía sau.
+## 🏗️ 1. Kiến trúc Phân quyền (RBAC)
+- **Chỉ có 2 Role:** `STUDENT` và `ADMIN` (đã loại bỏ hoàn toàn `MODERATOR`).
+- **Middleware tự động** bảo vệ các API và inject `x-user-id`, `x-user-role`, `x-user-tier` vào headers cho mọi route phía sau.
+- **Port Backend:** `4000` (Next.js API Routes)
 
 ---
 
-## 🚀 2. Chi tiết Các Giai đoạn Đã Hoàn Thành
+## 🗄️ 2. Tình trạng Database (Supabase PostgreSQL)
 
-### 🟢 Giai đoạn 1: Xác thực & Quản lý Người dùng (Authentication & User Management)
-| API Endpoint | Phương thức | Mô tả & Nghiệp vụ đã xử lý |
-| :--- | :---: | :--- |
-| `/api/auth/google` | `POST` | **Đăng nhập Google SSO:** Kiểm tra nghiêm ngặt email đuôi `@fpt.edu.vn`. Tự động khởi tạo tài khoản nếu chưa tồn tại, lưu ảnh đại diện (`avatarUrl`), và cấp token JWT bảo mật (7 ngày). |
-| `/api/users` | `GET` | **Danh sách User (Admin):** Lấy danh sách phân trang, hỗ trợ lọc theo `role` (STUDENT/ADMIN) và `status` (ACTIVE/SUSPENDED). Kèm thống kê số tài liệu và số phiên chat của từng sinh viên. |
-| `/api/users/[id]` | `PUT` | **Cập nhật quyền & trạng thái:** Cho phép Admin khóa/mở khóa tài khoản hoặc nâng quyền Admin. *Tính năng an toàn:* Tự động chặn Admin khóa hoặc hạ quyền của chính mình. |
+| Hạng mục | Trạng thái |
+|:---|:---:|
+| Kết nối Supabase | ✅ |
+| pgvector extension | ✅ |
+| Toàn bộ bảng sync | ✅ 21 bảng |
+| HNSW Index (embedding) | ✅ |
+| System Configs seeded | ✅ 7 cấu hình |
+| Prisma Client generated | ✅ v5.22.0 |
+
+### Danh sách 21 bảng trong DB
+
+| # | Tên bảng | Nhóm |
+|:---:|:---|:---|
+| 1 | `users` | Auth |
+| 2 | `one_time_passwords` | Auth |
+| 3 | `subjects` | Môn học |
+| 4 | `subject_suggestions` | Môn học |
+| 5 | `tags` | Môn học |
+| 6 | `documents` | Tài liệu |
+| 7 | `document_chunks` | Tài liệu / RAG |
+| 8 | `document_views` | Tài liệu / Analytics |
+| 9 | `document_ratings` | Tài liệu / Community |
+| 10 | `document_shares` | Tài liệu / Social |
+| 11 | `bookmarks` | Tổ chức cá nhân |
+| 12 | `collections` | Tổ chức cá nhân |
+| 13 | `collection_documents` | Tổ chức cá nhân |
+| 14 | `chat_sessions` | AI Chat |
+| 15 | `chat_messages` | AI Chat |
+| 16 | `citations` | AI Chat |
+| 17 | `ai_usage_logs` | AI / Rate Limit |
+| 18 | `ai_cache` | AI / Cost Saving |
+| 19 | `notifications` | Hệ thống |
+| 20 | `audit_logs` | Hệ thống |
+| 21 | `payment_receipts` | Thanh toán |
+| 22 | `system_configs` | Admin Config |
+
+---
+
+## 🚀 3. Chi tiết Các Giai đoạn Đã Hoàn Thành
+
+### 🟢 Giai đoạn 1: Xác thực & Quản lý Người dùng
+| API | Method | Nghiệp vụ |
+|:---|:---:|:---|
+| `/api/auth/google` | `POST` | Google SSO: Kiểm tra `@fpt.edu.vn`, auto tạo tài khoản, cấp JWT 7 ngày |
+| `/api/users` | `GET` | Danh sách user + filter + thống kê documents/chats |
+| `/api/users/[id]` | `PUT` | Khóa/mở/nâng quyền (chặn Admin tự hại mình) |
+
+### 🟡 Giai đoạn 2: Upload Tài liệu & Deduplication
+| API | Method | Nghiệp vụ |
+|:---|:---:|:---|
+| `/api/documents/upload-url` | `POST` | Hash-based dedup: Nếu file đã có → không upload lại, tiết kiệm storage |
+| `/api/documents` | `POST` | Auto-approve PRIVATE, PENDING cho PUBLIC |
+| `/api/documents/mock-upload` | `PUT` | Local dev fallback (không cần AWS key) |
+
+### 🟠 Giai đoạn 3: Kiểm duyệt & Quản lý Môn học
+| API | Method | Nghiệp vụ |
+|:---|:---:|:---|
+| `/api/documents/[id]/moderate` | `POST` | APPROVED/REJECTED + ghi audit_logs |
+| `/api/subjects` | `GET/POST` | Danh sách + tạo mới (audit logged) |
+| `/api/subjects/[id]` | `PUT/DELETE` | Sửa/Suspend môn học (audit logged) |
 
 ---
 
-### 🟡 Giai đoạn 2: Tải lên Tài liệu & Khử trùng lặp thông minh (Deduplication Storage)
-| API Endpoint | Phương thức | Mô tả & Nghiệp vụ đã xử lý |
-| :--- | :---: | :--- |
-| `/api/documents/upload-url` | `POST` | **Khử trùng lặp (Deduplication):** Nhận `fileHash` (SHA-256). Nếu file đã tồn tại trên Cloud -> Trả về `deduplicated: true` kèm link file cũ, giúp FE **không cần upload lại file lớn (tiết kiệm storage)**. |
-| `/api/documents` | `POST` | **Lưu metadata tài liệu:** Tạo bản ghi tài liệu mới. *Cải tiến UX:* Nếu chọn hiển thị `PRIVATE` -> Tự động duyệt (`APPROVED`) để dùng AI ngay. Nếu chọn `PUBLIC` -> Vào trạng thái chờ duyệt (`PENDING`). |
-| `/api/documents/mock-upload` | `PUT/POST` | **Giả lập Upload (Local Dev):** Fallback tự động khi lập trình viên chưa cấu hình key AWS S3 hoặc Supabase Storage, giúp UI không bị lỗi 404/500 khi test luồng upload. |
+## 🔮 4. Giai đoạn 4: AI RAG Pipeline (n8n)
+
+Luồng RAG được xây dựng trên **n8n** (Docker container port `5678`) thay vì xử lý trực tiếp trong code Next.js:
+
+```
+[Admin Duyệt Tài liệu]
+      ↓
+Backend gọi Webhook n8n (POST /webhook/ingest-doc)
+      ↓
+n8n: Tải PDF → Cắt chunk (1000 chars/150 overlap)
+      ↓
+n8n: OpenAI Embedding (text-embedding-3-small)
+      ↓
+n8n: Lưu vào Supabase (bảng document_chunks, cột embedding vector(1536))
+
+[Sinh viên Chat]
+      ↓
+Backend kiểm tra ai_usage_logs (rate limit từ system_configs)
+      ↓
+Backend kiểm tra ai_cache (cache hit → trả về ngay)
+      ↓ (cache miss)
+Backend gọi Webhook n8n (POST /webhook/rag-chat)
+      ↓
+n8n: Vector Search Supabase → Top-k chunks → GPT-4o → Answer + Citations
+      ↓
+Backend lưu chat_messages, citations, ai_usage_logs, ai_cache
+      ↓
+Frontend hiển thị câu trả lời + trích dẫn có thể click vào PDF
+```
 
 ---
 
-### 🟠 Giai đoạn 3: Kiểm duyệt Tài liệu & Quản lý Môn học (Admin Workflow)
-| API Endpoint | Phương thức | Mô tả & Nghiệp vụ đã xử lý |
-| :--- | :---: | :--- |
-| `/api/documents/[id]/moderate` | `POST` | **Duyệt/Từ chối tài liệu:** Admin duyệt (`APPROVED`) hoặc từ chối (`REJECTED`) kèm lý do. *Tối ưu Zod:* Hỗ trợ alias linh hoạt nhận cả key `status` hoặc `decision` từ Frontend. |
-| `/api/subjects` | `GET / POST` | **Quản lý Môn học:** Lấy danh sách hoặc tạo mới môn học (Mã môn học `code` là duy nhất). Tự động ghi nhận `AuditLog` cho mọi thao tác của Admin. |
-| `/api/subjects/[id]` | `PUT / DELETE` | **Sửa/Khóa Môn học:** Cập nhật thông tin môn học hoặc chuyển sang trạng thái `SUSPENDED` (Soft delete) thay vì xóa vĩnh viễn, đảm bảo toàn vẹn dữ liệu khóa học cũ. |
+## ⚙️ 5. System Configs (Admin có thể sửa mà không cần redeploy)
+
+| Key | Giá trị hiện tại | Ý nghĩa |
+|:---|:---:|:---|
+| `max_file_size_mb` | `50` | Dung lượng file tối đa |
+| `free_ai_limit_per_day` | `10` | Lượt AI/ngày cho Free |
+| `premium_ai_limit_per_day` | `50` | Lượt AI/ngày cho Premium |
+| `ai_cache_ttl_days` | `7` | Số ngày cache câu trả lời |
+| `soft_delete_retention_days` | `30` | Số ngày giữ file đã xóa |
+| `max_uploads_per_day` | `20` | File upload tối đa/ngày |
+| `allowed_mime_types` | `pdf, docx, txt, png, jpg` | Định dạng được phép |
 
 ---
 
-## 🗄️ 3. Tình trạng Cơ sở dữ liệu (Database Setup)
-- **Supabase PostgreSQL:** Đã kết nối thành công qua connection string (`DATABASE_URL`).
-- **Prisma Schema Sync:** Toàn bộ bảng dữ liệu (`users`, `documents`, `subjects`, `audit_logs`, v.v.) đã được đồng bộ lên DB qua lệnh `npx prisma db push`.
-- **Cập nhật Schema:** Đã nâng cấp `schema.prisma` cho phép `passwordHash String?` (null) và thêm `avatarUrl String?` để phục vụ Google SSO.
+## 🛠️ 6. Lệnh Chạy Backend
+
+```bash
+# Cài dependencies
+npm install
+
+# Setup DB lần đầu (mới clone về)
+node src/scripts/setup-vector.js   # Bật pgvector + tạo cột embedding
+npx prisma db push                 # Sync tất cả bảng lên Supabase
+node prisma/seed.js                # Seed system_configs mặc định
+npx prisma generate                # Generate Prisma Client
+
+# Chạy dev server (port 4000)
+npm run dev
+
+# Chạy n8n (Docker Desktop phải đang bật)
+docker compose up -d               # n8n tại http://localhost:5678
+```
 
 ---
-
-## 🔮 4. Định hướng Giai đoạn 4 (AI RAG & Automation)
-*Theo ghi nhận, luồng AI RAG (Retrieval-Augmented Generation) đang được lên kế hoạch xây dựng trên nền tảng low-code **n8n** thay vì xử lý trực tiếp bằng code Next.js API.*
-
-**Lợi ích của hướng đi sử dụng n8n:**
-1. **Tách biệt tải xử lý (Decoupling):** Node Next.js Backend tập trung xử lý API nghiệp vụ nhanh chóng, để việc cắt file (Chunking), gọi OpenAI Embedding và Vector Search cho webhook workflow của n8n xử lý ngầm.
-2. **Dễ chỉnh sửa Prompt & Flow:** Có thể thay đổi luồng RAG, prompt AI hoặc đổi model (GPT-4o sang Claude 3.5 Sonnet) kéo thả trên n8n mà không cần redeploy code Backend.
-3. **Kết nối DB dễ dàng:** n8n có sẵn node kết nối Postgres/Supabase để đọc ghi bảng `document_chunks` (vector 1536) một cách mượt mà.
-
----
-*Tài liệu này được tạo tự động để bàn giao cho đội ngũ Phát triển Frontend & Backend kiểm chứng và tích hợp.*
+*Tài liệu này được cập nhật tự động theo tiến độ phát triển dự án.*

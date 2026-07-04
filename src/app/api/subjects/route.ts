@@ -6,14 +6,56 @@ import { CreateSubjectSchema } from "@/lib/validation/subject"
  * @swagger
  * /api/subjects:
  *   get:
- *     summary: List Subjects
- *     tags: [Subjects]
+ *     summary: List all subjects
+ *     description: >
+ *       Returns a list of subjects. This is a public endpoint — no authentication
+ *       required. Supports optional filtering by a search keyword (matched against
+ *       name) and by status. Results are ordered by name ascending.
+ *     tags:
+ *       - Subjects
+ *     parameters:
+ *       - in: query
+ *         name: search
+ *         schema:
+ *           type: string
+ *         required: false
+ *         description: Partial match filter applied to subject name (case-insensitive).
+ *         example: "math"
+ *       - in: query
+ *         name: status
+ *         schema:
+ *           type: string
+ *           enum: [ACTIVE, SUSPENDED]
+ *         required: false
+ *         description: Filter subjects by their current status.
+ *         example: "ACTIVE"
  *     responses:
  *       200:
- *         description: List of subjects
+ *         description: Array of subjects matching the given filters.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: array
+ *               items:
+ *                 $ref: '#/components/schemas/Subject'
+ *             example:
+ *               - id: "550e8400-e29b-41d4-a716-446655440000"
+ *                 name: "Mathematics"
+ *                 code: "MATH101"
+ *                 status: "ACTIVE"
+ *                 createdAt: "2026-07-03T08:00:00.000Z"
+ *                 updatedAt: "2026-07-03T08:00:00.000Z"
+ *       500:
+ *         description: Unexpected server error.
  *   post:
- *     summary: Create Subject
- *     tags: [Subjects]
+ *     summary: Create a new subject
+ *     description: >
+ *       Creates a new subject. Restricted to administrators only (enforced by middleware).
+ *       The `code` field must be globally unique; if a subject with the same code
+ *       already exists a 409 Conflict is returned. On successful creation an entry
+ *       is appended to the `auditLog` table.
+ *     tags:
+ *       - Subjects
  *     security:
  *       - BearerAuth: []
  *     requestBody:
@@ -22,12 +64,38 @@ import { CreateSubjectSchema } from "@/lib/validation/subject"
  *         application/json:
  *           schema:
  *             type: object
+ *             required:
+ *               - name
+ *               - code
  *             properties:
- *               name: { type: string }
- *               code: { type: string }
+ *               name:
+ *                 type: string
+ *                 description: Human-readable display name of the subject.
+ *                 example: "Artificial Intelligence"
+ *               code:
+ *                 type: string
+ *                 description: Short unique identifier for the subject (e.g. course code).
+ *                 example: "AI301"
  *     responses:
  *       201:
- *         description: Subject created
+ *         description: Subject created successfully.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Subject'
+ *             example:
+ *               id: "550e8400-e29b-41d4-a716-446655440001"
+ *               name: "Artificial Intelligence"
+ *               code: "AI301"
+ *               status: "ACTIVE"
+ *               createdAt: "2026-07-03T08:00:00.000Z"
+ *               updatedAt: "2026-07-03T08:00:00.000Z"
+ *       409:
+ *         description: A subject with this code already exists.
+ *       422:
+ *         description: Validation error in request body.
+ *       500:
+ *         description: Unexpected server error.
  */
 // GET /api/subjects — public subject list
 export async function GET(req: NextRequest) {

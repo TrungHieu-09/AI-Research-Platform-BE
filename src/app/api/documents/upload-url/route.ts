@@ -8,7 +8,12 @@ import { db } from "@/lib/db"
  * /api/documents/upload-url:
  *   post:
  *     summary: Get Presigned Upload URL or Check Deduplication
- *     tags: [Documents]
+ *     description: >
+ *       Requests a presigned storage URL to upload a file directly from the client.
+ *       If `fileHash` (SHA-256) is provided, the backend checks for existing approved documents with the same hash.
+ *       If found, it performs instant deduplication (`deduplicated: true`) and returns the existing file URL, saving cloud storage and upload bandwidth.
+ *     tags:
+ *       - Documents
  *     security:
  *       - BearerAuth: []
  *     requestBody:
@@ -17,14 +22,46 @@ import { db } from "@/lib/db"
  *         application/json:
  *           schema:
  *             type: object
+ *             required:
+ *               - filename
+ *               - mimeType
+ *               - fileSize
  *             properties:
- *               filename: { type: string }
- *               mimeType: { type: string }
- *               fileSize: { type: integer }
- *               fileHash: { type: string }
+ *               filename:
+ *                 type: string
+ *                 example: "chapter1.pdf"
+ *               mimeType:
+ *                 type: string
+ *                 example: "application/pdf"
+ *               fileSize:
+ *                 type: integer
+ *                 description: File size in bytes (max 50MB).
+ *                 example: 5242880
+ *               fileHash:
+ *                 type: string
+ *                 description: SHA-256 hash (64 hex characters) of file contents for deduplication.
+ *                 example: "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
  *     responses:
  *       200:
- *         description: Presigned URL generated or duplicate found
+ *         description: Presigned URL generated OR duplicate detected.
+ *         content:
+ *           application/json:
+ *             examples:
+ *               new_file:
+ *                 summary: New file (no duplicate found)
+ *                 value:
+ *                   deduplicated: false
+ *                   uploadUrl: "https://storage.googleapis.com/bucket/doc.pdf?X-Goog-Algorithm=..."
+ *                   fileUrl: "https://storage.googleapis.com/bucket/doc.pdf"
+ *                   key: "users/123/doc.pdf"
+ *               deduplicated:
+ *                 summary: Duplicate file found
+ *                 value:
+ *                   deduplicated: true
+ *                   fileUrl: "https://storage.googleapis.com/bucket/existing-doc.pdf"
+ *                   message: "Duplicate file detected in platform. Reusing storage."
+ *       422:
+ *         description: Validation error (e.g. invalid file size or mime type).
  */
 export async function POST(req: NextRequest) {
   try {

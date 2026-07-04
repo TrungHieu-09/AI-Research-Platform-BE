@@ -73,6 +73,14 @@ model User {
   chatSessions       ChatSession[]
   paymentReceipts    PaymentReceipt[]
   auditLogs          AuditLog[]
+  bookmarks          Bookmark[]
+  sharesReceived     DocumentShare[]     @relation("SharedWith")
+  sharesCreated      DocumentShare[]     @relation("SharedBy")
+  collections        Collection[]
+  notifications      Notification[]
+  documentViews      DocumentView[]
+  aiUsageLogs        AiUsageLog[]
+  documentRatings    DocumentRating[]
 
   @@map("users")
 }
@@ -120,6 +128,7 @@ model Document {
   id              String             @id @default(uuid()) @db.Uuid
   title           String
   description     String?            @db.Text
+  thumbnailUrl    String?
   fileUrl         String
   fileHash        String
   fileSize        Int
@@ -142,6 +151,13 @@ model Document {
   chatSessions    ChatSession[]
   citations       Citation[]
   auditLogs       AuditLog[]
+  tags            Tag[]
+  bookmarks       Bookmark[]
+  shares          DocumentShare[]
+  collections     CollectionDocument[]
+  views           DocumentView[]
+  ratings         DocumentRating[]
+  aiCaches        AiCache[]
 
   @@index([status, deletedAt])
   @@map("documents")
@@ -231,4 +247,167 @@ model AuditLog {
   createdAt    DateTime  @default(now())
 
   @@map("audit_logs")
+}
+
+model Tag {
+  id        String     @id @default(uuid()) @db.Uuid
+  name      String     @unique
+  documents Document[]
+  createdAt DateTime   @default(now())
+
+  @@map("tags")
+}
+
+model Bookmark {
+  id         String   @id @default(uuid()) @db.Uuid
+  userId     String   @db.Uuid
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  documentId String   @db.Uuid
+  document   Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  createdAt  DateTime @default(now())
+
+  @@unique([userId, documentId])
+  @@map("bookmarks")
+}
+
+model DocumentShare {
+  id         String   @id @default(uuid()) @db.Uuid
+  documentId String   @db.Uuid
+  document   Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  sharedById String   @db.Uuid
+  sharedBy   User     @relation("SharedBy", fields: [sharedById], references: [id], onDelete: Cascade)
+  sharedWith String   @db.Uuid
+  sharedUser User     @relation("SharedWith", fields: [sharedWith], references: [id], onDelete: Cascade)
+  permission String   @default("view") // "view", "comment", "edit"
+  createdAt  DateTime @default(now())
+
+  @@unique([documentId, sharedWith])
+  @@map("document_shares")
+}
+
+model Collection {
+  id        String                @id @default(uuid()) @db.Uuid
+  name      String
+  userId    String                @db.Uuid
+  user      User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  documents CollectionDocument[]
+  createdAt DateTime              @default(now())
+  updatedAt DateTime              @updatedAt
+
+  @@map("collections")
+}
+
+model CollectionDocument {
+  id           String     @id @default(uuid()) @db.Uuid
+  collectionId String     @db.Uuid
+  collection   Collection @relation(fields: [collectionId], references: [id], onDelete: Cascade)
+  documentId   String     @db.Uuid
+  document     Document   @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  createdAt    DateTime   @default(now())
+
+  @@unique([collectionId, documentId])
+  @@map("collection_documents")
+}
+
+model Notification {
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String   @db.Uuid
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title     String
+  content   String   @db.Text
+  read      Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@map("notifications")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// System Configuration (Admin-configurable settings without redeploy)
+// ─────────────────────────────────────────────────────────────────────────────
+
+model SystemConfig {
+  id          String   @id @default(uuid()) @db.Uuid
+  key         String   @unique // e.g. "max_file_size_mb", "free_ai_limit", "allowed_mime_types"
+  value       String   // JSON string or plain value
+  label       String?  // Human-readable label for Admin UI
+  description String?  @db.Text
+  updatedById String?  @db.Uuid
+  updatedAt   DateTime @updatedAt
+
+  @@map("system_configs")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Document Views (for analytics dashboard)
+// ─────────────────────────────────────────────────────────────────────────────
+
+model DocumentView {
+  id         String   @id @default(uuid()) @db.Uuid
+  documentId String   @db.Uuid
+  document   Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  userId     String?  @db.Uuid
+  user       User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  ipAddress  String?
+  viewedAt   DateTime @default(now())
+
+  @@index([documentId, viewedAt])
+  @@index([userId, viewedAt])
+  @@map("document_views")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// AI Usage Logs (rate limiting: Free=10/day, Premium=50/day)
+// ─────────────────────────────────────────────────────────────────────────────
+
+model AiUsageLog {
+  id        String      @id @default(uuid()) @db.Uuid
+  userId    String      @db.Uuid
+  user      User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  sessionId String?     @db.Uuid
+  tokensIn  Int         @default(0)
+  tokensOut Int         @default(0)
+  usedAt    DateTime    @default(now())
+
+  @@index([userId, usedAt])
+  @@map("ai_usage_logs")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Document Ratings (1-5 stars + optional comment)
+// ─────────────────────────────────────────────────────────────────────────────
+
+model DocumentRating {
+  id         String   @id @default(uuid()) @db.Uuid
+  documentId String   @db.Uuid
+  document   Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  userId     String   @db.Uuid
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  rating     Int      // 1-5
+  comment    String?  @db.Text
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@unique([documentId, userId])
+  @@index([documentId])
+  @@map("document_ratings")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// AI Answer Cache (reduce OpenAI costs for repeated queries)
+// ─────────────────────────────────────────────────────────────────────────────
+
+model AiCache {
+  id         String   @id @default(uuid()) @db.Uuid
+  queryHash  String   @unique // SHA-256 of (documentId + normalized question)
+  documentId String   @db.Uuid
+  document   Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  question   String   @db.Text
+  answer     String   @db.Text
+  hitCount   Int      @default(0)
+  createdAt  DateTime @default(now())
+  expiresAt  DateTime // TTL — auto-expire stale cache
+
+  @@index([documentId])
+  @@index([expiresAt])
+  @@map("ai_cache")
 }

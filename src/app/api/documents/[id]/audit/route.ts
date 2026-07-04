@@ -5,25 +5,54 @@ import { getDocumentAuditLogs } from "@/lib/services/doc-service"
  * @swagger
  * /api/documents/{id}/audit:
  *   get:
- *     summary: Get Document Audit Logs
- *     tags: [Documents]
+ *     summary: Get Document Audit Logs (Admin only)
+ *     description: Retrieve all moderation and modification audit logs for a specific document.
+ *     tags:
+ *       - Documents
  *     security:
  *       - BearerAuth: []
  *     parameters:
  *       - in: path
  *         name: id
  *         required: true
- *         schema: { type: string }
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *         description: Document ID (UUID).
  *     responses:
  *       200:
- *         description: List of audit logs for the document
+ *         description: List of audit logs retrieved successfully.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: array
+ *               items:
+ *                 type: object
+ *                 properties:
+ *                   id: { type: string, format: uuid }
+ *                   action: { type: string, example: "DOCUMENT_APPROVED" }
+ *                   userId: { type: string, format: uuid }
+ *                   user:
+ *                     type: object
+ *                     properties:
+ *                       name: { type: string }
+ *                       role: { type: string }
+ *                   createdAt: { type: string, format: date-time }
+ *       403:
+ *         description: Access denied (Admin role required).
+ *       500:
+ *         description: Internal server error.
  */
-// GET /api/documents/[id]/audit
-export async function GET(_req: NextRequest, { params }: { params: { id: string } }) {
+export async function GET(req: NextRequest, { params }: { params: { id: string } }) {
   try {
+    const role = req.headers.get("x-user-role")
+    if (role !== "ADMIN") {
+      return NextResponse.json({ error: "Access denied. Admin role required." }, { status: 403 })
+    }
+
     const logs = await getDocumentAuditLogs(params.id)
-    return NextResponse.json(logs)
+    return NextResponse.json(logs, { status: 200 })
   } catch (err: any) {
-    return NextResponse.json({ error: err.message }, { status: 500 })
+    return NextResponse.json({ error: err.message ?? "Failed to fetch audit logs." }, { status: 500 })
   }
 }

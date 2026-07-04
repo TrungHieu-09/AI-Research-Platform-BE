@@ -7,7 +7,7 @@ import { googleLoginUser } from "@/lib/services/auth-service"
  * /api/auth/google:
  *   post:
  *     summary: Google SSO Login / Signup
- *     description: Authenticate or register a student/faculty member using Google SSO (@fpt.edu.vn)
+ *     description: Authenticate or register a student/faculty member using Google SSO. Strictly restricts to FPT University email addresses (@fpt.edu.vn). If user does not exist, an account is auto-created.
  *     tags:
  *       - Authentication
  *     requestBody:
@@ -22,6 +22,7 @@ import { googleLoginUser } from "@/lib/services/auth-service"
  *             properties:
  *               email:
  *                 type: string
+ *                 format: email
  *                 example: "student@fpt.edu.vn"
  *               name:
  *                 type: string
@@ -31,11 +32,37 @@ import { googleLoginUser } from "@/lib/services/auth-service"
  *                 example: "https://lh3.googleusercontent.com/..."
  *     responses:
  *       200:
- *         description: Login or Registration successful
+ *         description: Google authentication successful. Returns JWT token and clean user object.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 token:
+ *                   type: string
+ *                   example: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+ *                 user:
+ *                   type: object
+ *                   properties:
+ *                     id: { type: string, format: uuid }
+ *                     name: { type: string, example: "Nguyen Van A" }
+ *                     email: { type: string, example: "student@fpt.edu.vn" }
+ *                     avatarUrl: { type: string, example: "https://lh3.googleusercontent.com/..." }
+ *                     role: { type: string, enum: [STUDENT, ADMIN], example: "STUDENT" }
+ *                     tier: { type: string, enum: [FREE, PREMIUM], example: "FREE" }
  *       401:
- *         description: Unauthorized (Suspended account)
+ *         description: Unauthorized - Account is suspended.
+ *         content:
+ *           application/json:
+ *             example:
+ *               error: "Your account is suspended. Please contact support."
  *       422:
- *         description: Validation error (Non FPT email)
+ *         description: Validation error - Email must end with @fpt.edu.vn.
+ *         content:
+ *           application/json:
+ *             example:
+ *               error:
+ *                 email: ["Only FPT University email addresses (@fpt.edu.vn) are allowed."]
  */
 export async function POST(req: NextRequest) {
   try {
