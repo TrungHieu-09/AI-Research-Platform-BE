@@ -51,12 +51,10 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       return NextResponse.json({ error: parsed.error.flatten().fieldErrors }, { status: 422 })
     }
 
-    const item = await addDocumentToCollection(params.id, userId, parsed.data.documentId)
-    return NextResponse.json(item, { status: 200 })
+    const relation = await addDocumentToCollection(params.id, userId, parsed.data)
+    return NextResponse.json(relation, { status: 200 })
   } catch (err: any) {
-    let status = 400
-    if (err.message?.includes("Forbidden")) status = 403
-    if (err.message?.includes("not found")) status = 404
+    const status = err.message === "Collection not found." ? 404 : err.message === "Document not found." ? 404 : 400
     return NextResponse.json({ error: err.message }, { status })
   }
 }

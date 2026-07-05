@@ -20,6 +20,7 @@ const ROUTE_RULES: { path: string; minRole: Role }[] = [
   { path: "/api/documents/upload-url", minRole: "STUDENT" },
   { path: "/api/documents", minRole: "STUDENT" },
   { path: "/api/subjects/suggest", minRole: "STUDENT" },
+  { path: "/api/collections", minRole: "STUDENT" },
   { path: "/api/ai/chat", minRole: "STUDENT" },
   { path: "/api/ai/limit", minRole: "STUDENT" },
   { path: "/api/payments/checkout", minRole: "STUDENT" },

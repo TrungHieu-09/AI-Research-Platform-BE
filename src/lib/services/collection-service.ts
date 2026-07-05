@@ -1,5 +1,5 @@
 import { db } from "@/lib/db"
-import type { CreateCollectionInput } from "@/lib/validation/collection"
+import type { CreateCollectionInput, AddDocumentToCollectionInput } from "@/lib/validation/collection"
 
 export async function getUserCollections(userId: string) {
   return db.collection.findMany({
@@ -15,8 +15,13 @@ export async function getUserCollections(userId: string) {
             select: {
               id: true,
               title: true,
+              description: true,
               mimeType: true,
               fileSize: true,
+              pageCount: true,
+              subject: { select: { id: true, name: true, code: true } },
+              owner: { select: { id: true, name: true } },
+              createdAt: true,
             },
           },
         },
@@ -32,41 +37,63 @@ export async function createCollection(userId: string, input: CreateCollectionIn
       userId,
     },
     include: {
-      _count: { select: { documents: true } },
+      documents: {
+        include: {
+          document: {
+            select: {
+              id: true,
+              title: true,
+              description: true,
+            },
+          },
+        },
+      },
     },
   })
 }
 
-export async function addDocumentToCollection(collectionId: string, userId: string, documentId: string) {
-  const collection = await db.collection.findUnique({ where: { id: collectionId } })
+export async function addDocumentToCollection(collectionId: string, userId: string, input: AddDocumentToCollectionInput) {
+  const collection = await db.collection.findFirst({ where: { id: collectionId, userId } })
   if (!collection) throw new Error("Collection not found.")
-  if (collection.userId !== userId) throw new Error("Forbidden: Access denied to this collection.")
 
-  const doc = await db.document.findUnique({ where: { id: documentId, deletedAt: null } })
-  if (!doc) throw new Error("Document not found.")
+  const document = await db.document.findUnique({ where: { id: input.documentId, deletedAt: null } })
+  if (!document) throw new Error("Document not found.")
 
-  return db.collectionDocument.upsert({
-    where: { collectionId_documentId: { collectionId, documentId } },
-    create: { collectionId, documentId },
-    update: {},
+  return db.collectionDocument.create({
+    data: {
+      collectionId,
+      documentId: input.documentId,
+    },
     include: {
-      document: { select: { id: true, title: true, mimeType: true } },
+      document: {
+        select: {
+          id: true,
+          title: true,
+          description: true,
+          mimeType: true,
+          fileSize: true,
+          pageCount: true,
+        },
+      },
     },
   })
 }
 
-export async function removeDocumentFromCollection(collectionId: string, userId: string, documentId: string) {
-  const collection = await db.collection.findUnique({ where: { id: collectionId } })
+export async function removeDocumentFromCollection(collectionId: string, documentId: string, userId: string) {
+  const collection = await db.collection.findFirst({ where: { id: collectionId, userId } })
   if (!collection) throw new Error("Collection not found.")
-  if (collection.userId !== userId) throw new Error("Forbidden: Access denied to this collection.")
 
-  const item = await db.collectionDocument.findUnique({
-    where: { collectionId_documentId: { collectionId, documentId } },
+  const relation = await db.collectionDocument.findUnique({
+    where: {
+      collectionId_documentId: {
+        collectionId,
+        documentId,
+      },
+    },
   })
 
-  if (!item) throw new Error("Document not found in this collection.")
+  if (!relation) throw new Error("Document not found in collection.")
 
-  return db.collectionDocument.delete({
-    where: { id: item.id },
-  })
+  await db.collectionDocument.delete({ where: { id: relation.id } })
+  return { message: "Document removed from collection." }
 }
