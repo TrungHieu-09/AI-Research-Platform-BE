@@ -32,7 +32,6 @@ const ROUTE_RULES: { path: string; minRole: Role }[] = [
   { path: "/api/admin", minRole: "ADMIN" },
   { path: "/api/subjects", minRole: "ADMIN" },
   { path: "/api/users", minRole: "ADMIN" },
-  { path: "/api/payments/webhook", minRole: "ADMIN" },
 ]
 
 // ──────────────────────────────────────────────────────────────────────────────

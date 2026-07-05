@@ -50,7 +50,11 @@ const CheckoutSchema = z.object({
 // POST /api/payments/checkout
 export async function POST(req: NextRequest) {
   try {
-    const userId = req.headers.get("x-user-id")!
+    const userId = req.headers.get("x-user-id")
+    if (!userId) {
+      return NextResponse.json({ error: "Authentication required." }, { status: 401 })
+    }
+
     const body = await req.json()
     const parsed = CheckoutSchema.safeParse(body)
 

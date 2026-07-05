@@ -6,6 +6,28 @@ const PLAN_PRICES: Record<string, number> = {
   PREMIUM_YEARLY: 490000,
 }
 
+const PAYMENT_BANK = {
+  bankName: "VietcomBank",
+  bankCode: "VCB",
+  accountNumber: "1234567890",
+  accountName: "CONG TY LUMIS EDTECH",
+}
+
+function buildVietQrUrl(amount: number, transferContent: string) {
+  const params = new URLSearchParams({
+    amount: String(amount),
+    addInfo: transferContent,
+    accountName: PAYMENT_BANK.accountName,
+  })
+
+  return `https://img.vietqr.io/image/${PAYMENT_BANK.bankCode}-${PAYMENT_BANK.accountNumber}-compact2.png?${params.toString()}`
+}
+
+function isSuccessfulPaymentStatus(status?: string) {
+  if (!status) return true
+  return ["COMPLETED", "SUCCESS", "PAID"].includes(status.trim().toUpperCase())
+}
+
 export async function initiatePayment(userId: string, planId: string) {
   const amount = PLAN_PRICES[planId]
   if (!amount) throw new Error(`Unknown plan: ${planId}`)
@@ -16,23 +38,50 @@ export async function initiatePayment(userId: string, planId: string) {
     data: { userId, planId, amount, transferContent, status: "PENDING" },
   })
 
+  const qrCodeUrl = buildVietQrUrl(amount, transferContent)
+
   return {
+    orderId: receipt.id,
+    amount,
+    currency: "VND",
+    transferContent,
+    qrCodeUrl,
     receipt,
     paymentInstructions: {
-      bankName: "VietcomBank",
-      accountNumber: "1234567890",
-      accountName: "CONG TY LUMIS EDTECH",
+      bankName: PAYMENT_BANK.bankName,
+      accountNumber: PAYMENT_BANK.accountNumber,
+      accountName: PAYMENT_BANK.accountName,
       amount,
+      currency: "VND",
       transferContent,
+      qrCodeUrl,
       expiresAt: new Date(Date.now() + 30 * 60_000), // 30 minutes
     },
   }
 }
 
-export async function handlePaymentWebhook(transferContent: string, amountReceived: number) {
+export async function handlePaymentWebhook(transferContent: string, amountReceived: number, status?: string) {
   const receipt = await db.paymentReceipt.findUnique({ where: { transferContent } })
   if (!receipt) throw new Error("Payment receipt not found.")
   if (receipt.status !== "PENDING") throw new Error("Payment already processed.")
+
+  if (!isSuccessfulPaymentStatus(status)) {
+    await db.paymentReceipt.update({
+      where: { id: receipt.id },
+      data: { status: "FAILED" },
+    })
+
+    await db.auditLog.create({
+      data: {
+        userId: receipt.userId,
+        action: "PAYMENT_FAILED",
+        targetEntity: "payment_receipts",
+        targetId: receipt.id,
+      },
+    })
+
+    return { success: false, message: "Payment was not completed. Premium tier was not activated." }
+  }
 
   if (amountReceived < Number(receipt.amount)) {
     await db.paymentReceipt.update({
