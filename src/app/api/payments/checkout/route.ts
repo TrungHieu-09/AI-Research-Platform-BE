@@ -38,6 +38,27 @@ import { z } from "zod"
  *                 currency: { type: string, example: "VND" }
  *                 transferContent: { type: string, example: "LUMIS_UPGRADE_USER_123" }
  *                 qrCodeUrl: { type: string, example: "https://api.vietqr.io/..." }
+ *                 receipt:
+ *                   type: object
+ *                   properties:
+ *                     id: { type: string, format: uuid }
+ *                     planId: { type: string, example: "PREMIUM_MONTHLY" }
+ *                     amount: { type: number, example: 49000 }
+ *                     transferContent: { type: string, example: "LUMIS-550E8400-1710000000000" }
+ *                     status: { type: string, example: "PENDING" }
+ *                 paymentInstructions:
+ *                   type: object
+ *                   properties:
+ *                     bankName: { type: string, example: "VietcomBank" }
+ *                     accountNumber: { type: string, example: "1234567890" }
+ *                     accountName: { type: string, example: "CONG TY LUMIS EDTECH" }
+ *                     amount: { type: number, example: 49000 }
+ *                     currency: { type: string, example: "VND" }
+ *                     transferContent: { type: string, example: "LUMIS-550E8400-1710000000000" }
+ *                     qrCodeUrl: { type: string, example: "https://img.vietqr.io/image/VCB-1234567890-compact2.png?..." }
+ *                     expiresAt: { type: string, format: date-time }
+ *       401:
+ *         description: Authentication required.
  *       400:
  *         description: Payment initiation failed.
  *       422:
