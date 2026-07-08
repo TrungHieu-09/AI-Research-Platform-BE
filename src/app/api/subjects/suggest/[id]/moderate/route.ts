@@ -71,28 +71,60 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       return NextResponse.json({ error: "Suggestion not found" }, { status: 404 })
     }
 
-    if (suggestion.status !== "PENDING") {
+    if (suggestion.status !== "PENDING" && !(suggestion.status === "APPROVED" && action === "APPROVED" && !suggestion.subjectId)) {
       return NextResponse.json({ error: "Suggestion is already processed" }, { status: 400 })
     }
 
-    // Update suggestion status
+    let newSubject = null
+    if (action === "APPROVED") {
+      let code = body.code ? String(body.code).trim().toUpperCase() : ""
+      if (!code) {
+        const cleanName = suggestion.name
+          .toUpperCase()
+          .replace(/[^A-Z0-9]+/g, "_")
+          .replace(/^_|_$/g, "")
+        const prefix = cleanName.substring(0, 10) || "SUB"
+        code = prefix
+        let counter = 1
+        while (await db.subject.findUnique({ where: { code } })) {
+          const suffix = `_${Math.floor(100 + Math.random() * 900)}`
+          code = `${prefix.substring(0, 12 - suffix.length)}${suffix}`
+          counter++
+          if (counter > 10) {
+            code = `SUB_${Date.now().toString().substring(6)}`
+            break
+          }
+        }
+      } else {
+        const existingCode = await db.subject.findUnique({ where: { code } })
+        if (existingCode && existingCode.id !== suggestion.subjectId) {
+          return NextResponse.json({ error: `Subject code '${code}' already exists.` }, { status: 409 })
+        }
+      }
+
+      if (suggestion.subjectId) {
+        newSubject = await db.subject.findUnique({ where: { id: suggestion.subjectId } })
+      }
+      if (!newSubject) {
+        newSubject = await db.subject.create({
+          data: {
+            name: suggestion.name,
+            code: code,
+            status: "ACTIVE"
+          }
+        })
+      }
+    }
+
+    // Update suggestion status and link subjectId
     const updatedSuggestion = await db.subjectSuggestion.update({
       where: { id: params.id },
-      data: { status: action }
+      data: {
+        status: action,
+        ...(newSubject && { subjectId: newSubject.id })
+      },
+      include: { subject: true }
     })
-
-    // If approved, create the subject
-    if (action === "APPROVED") {
-      const code = suggestion.name.toUpperCase().replace(/\s+/g, '_').substring(0, 10)
-      
-      await db.subject.create({
-        data: {
-          name: suggestion.name,
-          code: code,
-          status: "ACTIVE"
-        }
-      })
-    }
 
     // Audit log
     await db.auditLog.create({

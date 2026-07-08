@@ -7,7 +7,7 @@ import { googleLoginUser } from "@/lib/services/auth-service"
  * /api/auth/google:
  *   post:
  *     summary: Google SSO Login / Signup
- *     description: Authenticate or register a student/faculty member using Google SSO. Strictly restricts to FPT University email addresses (@fpt.edu.vn). If user does not exist, an account is auto-created.
+ *     description: Authenticate or register a student/faculty member using Google SSO. Accepts any valid email address (standard email/Gmail). If user does not exist, an account is auto-created.
  *     tags:
  *       - Authentication
  *     requestBody:
@@ -23,7 +23,7 @@ import { googleLoginUser } from "@/lib/services/auth-service"
  *               email:
  *                 type: string
  *                 format: email
- *                 example: "student@fpt.edu.vn"
+ *                 example: "student@gmail.com"
  *               name:
  *                 type: string
  *                 example: "Nguyen Van A"
@@ -46,7 +46,7 @@ import { googleLoginUser } from "@/lib/services/auth-service"
  *                   properties:
  *                     id: { type: string, format: uuid }
  *                     name: { type: string, example: "Nguyen Van A" }
- *                     email: { type: string, example: "student@fpt.edu.vn" }
+ *                     email: { type: string, example: "student@gmail.com" }
  *                     avatarUrl: { type: string, example: "https://lh3.googleusercontent.com/..." }
  *                     role: { type: string, enum: [STUDENT, ADMIN], example: "STUDENT" }
  *                     tier: { type: string, enum: [FREE, PREMIUM], example: "FREE" }
@@ -57,12 +57,12 @@ import { googleLoginUser } from "@/lib/services/auth-service"
  *             example:
  *               error: "Your account is suspended. Please contact support."
  *       422:
- *         description: Validation error - Email must end with @fpt.edu.vn.
+ *         description: Validation error - Invalid email format or missing name.
  *         content:
  *           application/json:
  *             example:
  *               error:
- *                 email: ["Only FPT University email addresses (@fpt.edu.vn) are allowed."]
+ *                 email: ["Must be a valid email address."]
  */
 export async function POST(req: NextRequest) {
   try {
