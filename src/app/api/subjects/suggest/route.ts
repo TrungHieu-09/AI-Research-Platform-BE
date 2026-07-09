@@ -6,16 +6,29 @@ import { SubjectSuggestionSchema, ReviewSuggestionSchema } from "@/lib/validatio
  * @swagger
  * /api/subjects/suggest:
  *   get:
- *     summary: Get Pending Subject Suggestions
- *     tags: [Subjects]
+ *     summary: Get Subject Suggestions (Admin only)
+ *     description: Retrieve pending, approved, or rejected subject suggestions proposed by students.
+ *     tags:
+ *       - Subjects
  *     security:
  *       - BearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: status
+ *         schema:
+ *           type: string
+ *           enum: [PENDING, APPROVED, REJECTED]
+ *           default: PENDING
  *     responses:
  *       200:
- *         description: List of suggestions
+ *         description: List of subject suggestions retrieved successfully.
+ *       403:
+ *         description: Access denied (Admin role required).
  *   post:
- *     summary: Suggest a new Subject
- *     tags: [Subjects]
+ *     summary: Suggest a New Subject
+ *     description: Allows a student or faculty member to propose a new academic subject.
+ *     tags:
+ *       - Subjects
  *     security:
  *       - BearerAuth: []
  *     requestBody:
@@ -24,11 +37,17 @@ import { SubjectSuggestionSchema, ReviewSuggestionSchema } from "@/lib/validatio
  *         application/json:
  *           schema:
  *             type: object
+ *             required:
+ *               - name
  *             properties:
- *               name: { type: string }
+ *               name:
+ *                 type: string
+ *                 example: "Quantum Computing & Cryptography"
  *     responses:
  *       201:
- *         description: Suggestion created
+ *         description: Subject suggestion created successfully.
+ *       422:
+ *         description: Validation error.
  */
 // POST /api/subjects/suggest — Student proposes a new subject tag
 export async function POST(req: NextRequest) {
@@ -54,6 +73,11 @@ export async function POST(req: NextRequest) {
 // GET /api/subjects/suggest — Admin views pending suggestions
 export async function GET(req: NextRequest) {
   try {
+    const role = req.headers.get("x-user-role")
+    if (role !== "ADMIN") {
+      return NextResponse.json({ error: "Access denied. Admin role required." }, { status: 403 })
+    }
+
     const { searchParams } = new URL(req.url)
     const status = (searchParams.get("status") as "PENDING" | "APPROVED" | "REJECTED") ?? "PENDING"
 

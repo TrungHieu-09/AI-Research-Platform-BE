@@ -97,16 +97,22 @@ import { CreateSubjectSchema } from "@/lib/validation/subject"
  *       500:
  *         description: Unexpected server error.
  */
-// GET /api/subjects — public subject list
+// GET /api/subjects — public or student/admin subject list (returns ACTIVE by default)
 export async function GET(req: NextRequest) {
   try {
+    const role = req.headers.get("x-user-role")
     const { searchParams } = new URL(req.url)
     const search = searchParams.get("search") ?? ""
-    const status = searchParams.get("status") as "ACTIVE" | "SUSPENDED" | null
+    let status = searchParams.get("status") as "ACTIVE" | "SUSPENDED" | null
+
+    // If caller is not ADMIN or if status is not explicitly requested, default to returning ACTIVE subjects
+    if (role !== "ADMIN" || !status) {
+      status = "ACTIVE"
+    }
 
     const subjects = await db.subject.findMany({
       where: {
-        ...(status && { status }),
+        status,
         ...(search && { name: { contains: search, mode: "insensitive" } }),
       },
       orderBy: { name: "asc" },
@@ -118,9 +124,14 @@ export async function GET(req: NextRequest) {
   }
 }
 
-// POST /api/subjects — Admin only (enforced by middleware)
+// POST /api/subjects — Admin only
 export async function POST(req: NextRequest) {
   try {
+    const role = req.headers.get("x-user-role")
+    if (role !== "ADMIN") {
+      return NextResponse.json({ error: "Access denied. Admin role required." }, { status: 403 })
+    }
+
     const adminId = req.headers.get("x-user-id")
     const body = await req.json()
     const parsed = CreateSubjectSchema.safeParse(body)

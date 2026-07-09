@@ -1,10 +1,52 @@
 import { NextRequest, NextResponse } from "next/server"
-import { db } from "@/lib/db"
+import { getUserChatSessions } from "@/lib/services/ai-service"
 
-export async function GET(req: NextRequest, context: any) {
+/**
+ * @swagger
+ * /api/ai/sessions:
+ *   get:
+ *     summary: Get User AI Chat Sessions
+ *     description: Retrieve all RAG chatbot conversations initiated by the authenticated user, sorted by most recent activity.
+ *     tags:
+ *       - AI
+ *     security:
+ *       - BearerAuth: []
+ *     responses:
+ *       200:
+ *         description: List of chat sessions retrieved successfully.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: array
+ *               items:
+ *                 type: object
+ *                 properties:
+ *                   id: { type: string, format: uuid }
+ *                   title: { type: string, example: "Discussion on Binary Trees" }
+ *                   scope: { type: string, enum: [SINGLE_DOCUMENT, SUBJECT, GLOBAL] }
+ *                   document:
+ *                     type: object
+ *                     properties:
+ *                       id: { type: string, format: uuid }
+ *                       title: { type: string }
+ *                   _count:
+ *                     type: object
+ *                     properties:
+ *                       messages: { type: integer, example: 8 }
+ *                   updatedAt: { type: string, format: date-time }
+ *       401:
+ *         description: Authentication required.
+ */
+export async function GET(req: NextRequest) {
   try {
-    return NextResponse.json({ message: "Not implemented" }, { status: 501 })
+    const userId = req.headers.get("x-user-id")
+    if (!userId) {
+      return NextResponse.json({ error: "Authentication required." }, { status: 401 })
+    }
+
+    const sessions = await getUserChatSessions(userId)
+    return NextResponse.json(sessions, { status: 200 })
   } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 500 })
+    return NextResponse.json({ error: error.message ?? "Failed to fetch chat sessions." }, { status: 500 })
   }
 }

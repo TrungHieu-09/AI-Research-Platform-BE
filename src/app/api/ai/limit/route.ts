@@ -6,12 +6,25 @@ import { checkAiRateLimit } from "@/lib/services/ai-service"
  * /api/ai/limit:
  *   get:
  *     summary: Check AI Rate Limits
- *     tags: [AI]
+ *     description: Retrieve the caller's daily AI query quota, queries consumed today, remaining queries, and current account tier.
+ *     tags:
+ *       - AI
  *     security:
  *       - BearerAuth: []
  *     responses:
  *       200:
- *         description: Token quota and remaining limits
+ *         description: Quota details retrieved successfully.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 queriesToday: { type: integer, example: 3 }
+ *                 limit: { type: integer, example: 10 }
+ *                 remaining: { type: integer, example: 7 }
+ *                 tier: { type: string, enum: [FREE, PREMIUM], example: "FREE" }
+ *       500:
+ *         description: Internal server error.
  */
 // GET /api/ai/limit — returns remaining daily query quota for the caller
 export async function GET(req: NextRequest) {

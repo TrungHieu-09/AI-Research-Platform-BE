@@ -14,19 +14,23 @@ const ROLE_HIERARCHY = {
 type Role = keyof typeof ROLE_HIERARCHY
 
 const ROUTE_RULES: { path: string; minRole: Role }[] = [
+  { path: "/api/notifications", minRole: "STUDENT" },
+  { path: "/api/collections", minRole: "STUDENT" },
+  { path: "/api/bookmarks", minRole: "STUDENT" },
   { path: "/api/documents/upload-url", minRole: "STUDENT" },
   { path: "/api/documents", minRole: "STUDENT" },
   { path: "/api/subjects/suggest", minRole: "STUDENT" },
+  { path: "/api/collections", minRole: "STUDENT" },
   { path: "/api/ai/chat", minRole: "STUDENT" },
   { path: "/api/ai/limit", minRole: "STUDENT" },
   { path: "/api/payments/checkout", minRole: "STUDENT" },
+  { path: "/api/payments/receipts", minRole: "STUDENT" },
   { path: "/api/documents", minRole: "STUDENT" }, // general doc access
   // Admin+ routes
   { path: "/api/documents/moderate", minRole: "ADMIN" },
   // Admin-only routes
-  { path: "/api/subjects", minRole: "ADMIN" },
+  { path: "/api/admin", minRole: "ADMIN" },
   { path: "/api/users", minRole: "ADMIN" },
-  { path: "/api/payments/webhook", minRole: "ADMIN" },
 ]
 
 // ──────────────────────────────────────────────────────────────────────────────

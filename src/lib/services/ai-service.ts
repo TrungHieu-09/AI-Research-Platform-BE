@@ -66,12 +66,26 @@ If the context does not contain enough information, say so clearly — do not ha
     ? `Context Sources:\n${contexts}\n\nStudent Question:\n${message}`
     : `Student Question:\n${message}\n\n(No relevant document excerpts found. Provide a general academic answer.)`
 
-  // 5. Persist user message
+  // 5. Ensure chat session exists
+  await db.chatSession.upsert({
+    where: { id: sessionId },
+    create: {
+      id: sessionId,
+      userId,
+      title: message.slice(0, 60),
+      documentId: documentId ?? null,
+      subjectId: subjectId ?? null,
+      scope,
+    },
+    update: { updatedAt: new Date() },
+  })
+
+  // 6. Persist user message
   await db.chatMessage.create({
     data: { sessionId, sender: "USER", message },
   })
 
-  // 6. Call OpenAI (non-streaming for simplicity; swap for streaming in production)
+  // 7. Call OpenAI (non-streaming for simplicity; swap for streaming in production)
   const completion = await openai.chat.completions.create({
     model: "gpt-4o-mini",
     messages: [
@@ -83,12 +97,12 @@ If the context does not contain enough information, say so clearly — do not ha
 
   const aiAnswer = completion.choices[0].message.content ?? ""
 
-  // 7. Persist AI message
+  // 8. Persist AI message
   const aiMessage = await db.chatMessage.create({
     data: { sessionId, sender: "AI", message: aiAnswer },
   })
 
-  // 8. Persist citations
+  // 9. Persist citations
   if (matchedChunks.length > 0) {
     await db.citation.createMany({
       data: matchedChunks.map((chunk) => ({
@@ -100,7 +114,7 @@ If the context does not contain enough information, say so clearly — do not ha
     })
   }
 
-  // 9. Record audit log
+  // 10. Record audit log
   await db.auditLog.create({
     data: { userId, action: "AI_QUERY", targetEntity: "chat_sessions", targetId: sessionId },
   })
@@ -114,4 +128,42 @@ If the context does not contain enough information, say so clearly — do not ha
       excerpt: c.content.slice(0, 200),
     })),
   }
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
+// Chat Sessions & History Retrieval
+// ──────────────────────────────────────────────────────────────────────────────
+
+export async function getUserChatSessions(userId: string) {
+  return db.chatSession.findMany({
+    where: { userId },
+    orderBy: { updatedAt: "desc" },
+    include: {
+      document: { select: { id: true, title: true } },
+      subject: { select: { id: true, name: true, code: true } },
+      _count: { select: { messages: true } },
+    },
+  })
+}
+
+export async function getSessionMessages(sessionId: string, userId: string) {
+  const session = await db.chatSession.findUnique({ where: { id: sessionId } })
+  if (!session) throw new Error("Session not found.")
+  if (session.userId !== userId) throw new Error("Forbidden: Access denied to this chat session.")
+
+  return db.chatMessage.findMany({
+    where: { sessionId },
+    orderBy: { createdAt: "asc" },
+    include: {
+      citations: {
+        select: {
+          id: true,
+          documentId: true,
+          pageNumber: true,
+          textExcerpt: true,
+          document: { select: { title: true } },
+        },
+      },
+    },
+  })
 }

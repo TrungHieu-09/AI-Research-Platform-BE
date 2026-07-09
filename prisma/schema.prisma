@@ -70,13 +70,13 @@ model User {
   documents          Document[]          @relation("UserDocuments")
   moderatedDocs      Document[]          @relation("ModeratedDocuments")
   subjectSuggestions SubjectSuggestion[]
+  collections        Collection[]
   chatSessions       ChatSession[]
   paymentReceipts    PaymentReceipt[]
   auditLogs          AuditLog[]
   bookmarks          Bookmark[]
   sharesReceived     DocumentShare[]     @relation("SharedWith")
   sharesCreated      DocumentShare[]     @relation("SharedBy")
-  collections        Collection[]
   notifications      Notification[]
   documentViews      DocumentView[]
   aiUsageLogs        AiUsageLog[]
