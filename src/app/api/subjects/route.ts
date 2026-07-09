@@ -154,7 +154,7 @@ export async function POST(req: NextRequest) {
           action: "CREATE_SUBJECT",
           targetEntity: "subjects",
           targetId: subject.id,
-          ipAddress: req.headers.get("x-forwarded-for") ?? req.ip
+          ipAddress: req.headers.get("x-forwarded-for") ?? (req as any).ip
         }
       })
     }

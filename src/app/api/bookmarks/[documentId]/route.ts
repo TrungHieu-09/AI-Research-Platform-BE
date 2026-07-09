@@ -45,12 +45,13 @@ import { addBookmark, removeBookmark } from "@/lib/services/interaction-service"
  *         description: Bookmark not found.
  */
 
-export async function POST(req: NextRequest, { params }: { params: { documentId: string } }) {
+export async function POST(req: NextRequest, { params }: { params: Promise<{ documentId: string }> }) {
   try {
+    const { documentId } = await params
     const userId = req.headers.get("x-user-id")
     if (!userId) return NextResponse.json({ error: "Authentication required." }, { status: 401 })
 
-    const bookmark = await addBookmark(params.documentId, userId)
+    const bookmark = await addBookmark(documentId, userId)
     return NextResponse.json(bookmark, { status: 200 })
   } catch (err: any) {
     const status = err.message === "Document not found." ? 404 : 400
@@ -58,12 +59,13 @@ export async function POST(req: NextRequest, { params }: { params: { documentId:
   }
 }
 
-export async function DELETE(req: NextRequest, { params }: { params: { documentId: string } }) {
+export async function DELETE(req: NextRequest, { params }: { params: Promise<{ documentId: string }> }) {
   try {
+    const { documentId } = await params
     const userId = req.headers.get("x-user-id")
     if (!userId) return NextResponse.json({ error: "Authentication required." }, { status: 401 })
 
-    await removeBookmark(params.documentId, userId)
+    await removeBookmark(documentId, userId)
     return NextResponse.json({ message: "Bookmark removed successfully." }, { status: 200 })
   } catch (err: any) {
     const status = err.message === "Bookmark not found." ? 404 : 400

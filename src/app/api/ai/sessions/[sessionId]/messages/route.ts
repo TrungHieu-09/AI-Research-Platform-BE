@@ -45,14 +45,15 @@ import { getSessionMessages } from "@/lib/services/ai-service"
  *       404:
  *         description: Session not found.
  */
-export async function GET(req: NextRequest, { params }: { params: { sessionId: string } }) {
+export async function GET(req: NextRequest, { params }: { params: Promise<{ sessionId: string }> }) {
   try {
+    const { sessionId } = await params
     const userId = req.headers.get("x-user-id")
     if (!userId) {
       return NextResponse.json({ error: "Authentication required." }, { status: 401 })
     }
 
-    const messages = await getSessionMessages(params.sessionId, userId)
+    const messages = await getSessionMessages(sessionId, userId)
     return NextResponse.json(messages, { status: 200 })
   } catch (error: any) {
     let status = 500

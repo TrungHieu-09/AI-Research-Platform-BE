@@ -43,14 +43,15 @@ import { getDocumentAuditLogs } from "@/lib/services/doc-service"
  *       500:
  *         description: Internal server error.
  */
-export async function GET(req: NextRequest, { params }: { params: { id: string } }) {
+export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
+    const { id } = await params
     const role = req.headers.get("x-user-role")
     if (role !== "ADMIN") {
       return NextResponse.json({ error: "Access denied. Admin role required." }, { status: 403 })
     }
 
-    const logs = await getDocumentAuditLogs(params.id)
+    const logs = await getDocumentAuditLogs(id)
     return NextResponse.json(logs, { status: 200 })
   } catch (err: any) {
     return NextResponse.json({ error: err.message ?? "Failed to fetch audit logs." }, { status: 500 })
