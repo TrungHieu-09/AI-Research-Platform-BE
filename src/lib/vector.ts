@@ -1,18 +1,40 @@
-import OpenAI from "openai"
+import { getGeminiClient, rotateGeminiKey } from "@/lib/gemini-pool"
 import { db } from "@/lib/db"
 
-const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
-
 /**
- * Generate a vector embedding for the given text using OpenAI's
- * text-embedding-ada-002 model (1536 dimensions).
+ * Generate a vector embedding for the given text using Google Gemini's
+ * gemini-embedding-001 model with robust exponential backoff retry & multi-key rotation for Free Tier rate limits.
  */
 export async function getEmbeddings(text: string): Promise<number[]> {
-  const response = await openai.embeddings.create({
-    model: "text-embedding-ada-002",
-    input: text.trim(),
-  })
-  return response.data[0].embedding
+  let lastErr: any = null
+
+  for (let attempt = 1; attempt <= 4; attempt++) {
+    try {
+      const genAI = getGeminiClient()
+      const model = genAI.getGenerativeModel({ model: "gemini-embedding-001" })
+      const result = await model.embedContent(text.trim())
+      const vals = result.embedding.values
+      // Slice/Matryoshka representation to 768 dimensions for pgvector hnsw indexing limit (<2000)
+      return vals.slice(0, 768)
+    } catch (err: any) {
+      lastErr = err
+      const msg = err.message || ""
+      if (msg.includes("503") || msg.includes("429") || msg.includes("high demand") || msg.includes("exceeded") || msg.includes("Quota")) {
+        const rotated = rotateGeminiKey()
+        if (rotated) {
+          console.warn(`[Embeddings Warn] Rate limit on attempt ${attempt}. Rotated API key instantly...`)
+          continue
+        }
+        const waitMs = attempt * 2000
+        console.warn(`[Embeddings Warn] Rate limit/High demand on attempt ${attempt}. Waiting ${waitMs}ms before retry...`)
+        await new Promise((resolve) => setTimeout(resolve, waitMs))
+        continue
+      } else {
+        break
+      }
+    }
+  }
+  throw lastErr ?? new Error("Failed to generate vector embeddings after multiple retries.")
 }
 
 /**

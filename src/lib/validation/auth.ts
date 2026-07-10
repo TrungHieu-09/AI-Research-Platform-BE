@@ -1,20 +1,17 @@
 import { z } from "zod"
 
-const fptEmail = z
+const standardEmail = z
   .string()
   .email("Must be a valid email address.")
-  .refine((val) => val.endsWith("@fpt.edu.vn"), {
-    message: "Only @fpt.edu.vn institutional emails are accepted.",
-  })
 
 export const LoginSchema = z.object({
-  email: fptEmail,
+  email: standardEmail,
   password: z.string().min(8, "Password must be at least 8 characters long."),
 })
 
 export const SignupSchema = z.object({
   name: z.string().min(2, "Name must be at least 2 characters."),
-  email: fptEmail,
+  email: standardEmail,
   password: z
     .string()
     .min(8, "Password must be at least 8 characters.")
@@ -23,12 +20,12 @@ export const SignupSchema = z.object({
 })
 
 export const VerifyOtpSchema = z.object({
-  email: fptEmail,
+  email: standardEmail,
   otpCode: z.string().length(6, "OTP code must be exactly 6 digits.").regex(/^\d+$/, "OTP must be numeric."),
 })
 
 export const GoogleAuthSchema = z.object({
-  email: fptEmail,
+  email: standardEmail,
   name: z.string().min(1, "Name is required."),
   avatarUrl: z.string().optional().or(z.literal("")),
 })

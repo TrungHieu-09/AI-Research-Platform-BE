@@ -70,13 +70,13 @@ model User {
   documents          Document[]          @relation("UserDocuments")
   moderatedDocs      Document[]          @relation("ModeratedDocuments")
   subjectSuggestions SubjectSuggestion[]
+  collections        Collection[]
   chatSessions       ChatSession[]
   paymentReceipts    PaymentReceipt[]
   auditLogs          AuditLog[]
   bookmarks          Bookmark[]
   sharesReceived     DocumentShare[]     @relation("SharedWith")
   sharesCreated      DocumentShare[]     @relation("SharedBy")
-  collections        Collection[]
   notifications      Notification[]
   documentViews      DocumentView[]
   aiUsageLogs        AiUsageLog[]
@@ -171,7 +171,7 @@ model DocumentChunk {
   pageNumber Int
   content    String   @db.Text
   metadata   Json?    @default("{}")
-  embedding  Unsupported("vector(1536)")?
+  embedding  Unsupported("vector(768)")?
   createdAt  DateTime @default(now())
 
   @@map("document_chunks")

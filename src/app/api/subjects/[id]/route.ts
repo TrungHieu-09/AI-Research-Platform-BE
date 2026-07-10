@@ -6,26 +6,41 @@ import { UpdateSubjectSchema } from "@/lib/validation/subject"
  * @swagger
  * /api/subjects/{id}:
  *   get:
- *     summary: Get Subject Detail
- *     tags: [Subjects]
+ *     summary: Get Subject Details
+ *     description: Retrieve details of a specific subject by ID.
+ *     tags:
+ *       - Subjects
  *     parameters:
  *       - in: path
  *         name: id
  *         required: true
- *         schema: { type: string }
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *         description: Subject ID (UUID).
  *     responses:
  *       200:
- *         description: Subject detail
+ *         description: Subject details retrieved successfully.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Subject'
+ *       404:
+ *         description: Subject not found.
  *   put:
- *     summary: Edit Subject Metadata
- *     tags: [Subjects]
+ *     summary: Edit Subject Metadata (Admin only)
+ *     description: Update subject code, name, or status.
+ *     tags:
+ *       - Subjects
  *     security:
  *       - BearerAuth: []
  *     parameters:
  *       - in: path
  *         name: id
  *         required: true
- *         schema: { type: string }
+ *         schema:
+ *           type: string
+ *           format: uuid
  *     requestBody:
  *       required: true
  *       content:
@@ -33,24 +48,41 @@ import { UpdateSubjectSchema } from "@/lib/validation/subject"
  *           schema:
  *             type: object
  *             properties:
- *               name: { type: string }
- *               status: { type: string }
+ *               code: { type: string, example: "CS101" }
+ *               name: { type: string, example: "Computer Science 101" }
+ *               status: { type: string, enum: [ACTIVE, SUSPENDED] }
  *     responses:
  *       200:
- *         description: Subject updated
+ *         description: Subject updated successfully.
+ *       403:
+ *         description: Access denied (Admin role required).
+ *       404:
+ *         description: Subject not found.
+ *       422:
+ *         description: Validation error.
  *   delete:
- *     summary: Disable/Remove Subject
- *     tags: [Subjects]
+ *     summary: Suspend Subject (Admin only)
+ *     description: Deactivates a subject by setting its status to SUSPENDED.
+ *     tags:
+ *       - Subjects
  *     security:
  *       - BearerAuth: []
  *     parameters:
  *       - in: path
  *         name: id
  *         required: true
- *         schema: { type: string }
+ *         schema:
+ *           type: string
+ *           format: uuid
  *     responses:
- *       204:
- *         description: Subject removed
+ *       200:
+ *         description: Subject deactivated successfully.
+ *         content:
+ *           application/json:
+ *             example:
+ *               message: "Subject deactivated."
+ *       403:
+ *         description: Access denied (Admin role required).
  */
 // GET /api/subjects/[id]
 export async function GET(_req: NextRequest, { params }: { params: { id: string } }) {
@@ -62,6 +94,11 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
 // PUT /api/subjects/[id] — Admin only
 export async function PUT(req: NextRequest, { params }: { params: { id: string } }) {
   try {
+    const role = req.headers.get("x-user-role")
+    if (role !== "ADMIN") {
+      return NextResponse.json({ error: "Access denied. Admin role required." }, { status: 403 })
+    }
+
     const adminId = req.headers.get("x-user-id")
     const body = await req.json()
     const parsed = UpdateSubjectSchema.safeParse(body)
@@ -85,13 +122,18 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
 
     return NextResponse.json(subject)
   } catch (err: any) {
-    return NextResponse.json({ error: err.message }, { status: 400 })
+    return NextResponse.json({ error: err.message ?? "Failed to update subject." }, { status: 400 })
   }
 }
 
 // DELETE /api/subjects/[id] — Admin only (sets status to SUSPENDED)
 export async function DELETE(req: NextRequest, { params }: { params: { id: string } }) {
   try {
+    const role = req.headers.get("x-user-role")
+    if (role !== "ADMIN") {
+      return NextResponse.json({ error: "Access denied. Admin role required." }, { status: 403 })
+    }
+
     const adminId = req.headers.get("x-user-id")
     const subject = await db.subject.update({
       where: { id: params.id },
@@ -112,6 +154,6 @@ export async function DELETE(req: NextRequest, { params }: { params: { id: strin
 
     return NextResponse.json({ message: "Subject deactivated.", subject })
   } catch (err: any) {
-    return NextResponse.json({ error: err.message }, { status: 400 })
+    return NextResponse.json({ error: err.message ?? "Failed to suspend subject." }, { status: 400 })
   }
 }
