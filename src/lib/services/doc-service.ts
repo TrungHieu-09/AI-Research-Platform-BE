@@ -1,5 +1,6 @@
 import { db } from "@/lib/db"
 import type { UploadMetadataInput, ModerationDecisionInput } from "@/lib/validation/doc"
+import { autoIngestDocument } from "@/lib/services/ingest-service"
 
 // ──────────────────────────────────────────────────────────────────────────────
 // Document listing
@@ -58,14 +59,14 @@ export async function getDocumentById(id: string, requestingUserId: string, requ
 
 export async function createDocument(ownerId: string, input: UploadMetadataInput) {
   // Deduplication check: check if an approved document with the exact same hash exists
-  const duplicate = await db.document.findFirst({
+  const duplicate = input.fileHash ? await db.document.findFirst({
     where: { fileHash: input.fileHash, deletedAt: null, status: "APPROVED" },
-  })
+  }) : null
 
   // If duplicate exists, reuse its storage fileUrl so we don't store duplicate files
   const fileUrl = duplicate ? duplicate.fileUrl : input.fileUrl
 
-  return db.document.create({
+  const doc = await db.document.create({
     data: {
       ...input,
       fileUrl,
@@ -73,6 +74,15 @@ export async function createDocument(ownerId: string, input: UploadMetadataInput
       status: input.visibility === "PUBLIC" ? "PENDING" : "APPROVED",
     },
   })
+
+  // Auto-trigger vector ingestion in the background if document is immediately approved (PRIVATE docs)
+  if (doc.status === "APPROVED") {
+    autoIngestDocument(doc.id, doc.fileUrl).catch((err) => {
+      console.error(`[AutoIngest Error] Failed background ingestion for private doc ${doc.id}:`, err.message)
+    })
+  }
+
+  return doc
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -128,6 +138,13 @@ export async function moderateDocument(
       ipAddress: ipAddress ?? null,
     },
   })
+
+  // Auto-trigger vector ingestion in the background when Admin approves a public document
+  if (updated.status === "APPROVED") {
+    autoIngestDocument(updated.id, updated.fileUrl).catch((err) => {
+      console.error(`[AutoIngest Error] Failed background ingestion for approved public doc ${updated.id}:`, err.message)
+    })
+  }
 
   return updated
 }

@@ -5,11 +5,11 @@ export const UploadMetadataSchema = z.object({
   description: z.string().max(2000).optional(),
   subjectId: z.string().uuid("Invalid subject ID."),
   visibility: z.enum(["PRIVATE", "PUBLIC"]).default("PRIVATE"),
-  fileUrl: z.string().url("Invalid file URL."),
-  fileHash: z.string().min(64, "Invalid SHA-256 hash.").max(64),
-  fileSize: z.number().int().positive("File size must be a positive integer."),
-  mimeType: z.string().min(1, "MIME type is required."),
-  pageCount: z.number().int().nonnegative().default(0),
+  fileUrl: z.string().url("Invalid file URL.").or(z.string().min(1)),
+  fileHash: z.string().optional().default("0000000000000000000000000000000000000000000000000000000000000000"),
+  fileSize: z.number().int().positive().optional().default(1024),
+  mimeType: z.string().optional().default("application/pdf"),
+  pageCount: z.number().int().nonnegative().optional().default(1),
 })
 
 export const ModerationDecisionSchema = z.preprocess(
