@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { UploadMetadataSchema } from "@/lib/validation/doc"
 import { getUserDocuments, createDocument } from "@/lib/services/doc-service"
+import { getAdminDocuments } from "@/lib/services/admin-service"
 
 /**
  * @swagger
@@ -133,9 +134,28 @@ import { getUserDocuments, createDocument } from "@/lib/services/doc-service"
 export async function GET(req: NextRequest) {
   try {
     const userId = req.headers.get("x-user-id")!
+    const role = req.headers.get("x-user-role")
     const { searchParams } = new URL(req.url)
     const page = Math.max(1, Number(searchParams.get("page") ?? 1))
     const pageSize = Math.min(50, Math.max(1, Number(searchParams.get("pageSize") ?? 20)))
+
+    // If caller is ADMIN and requests system-wide filtering or status filtering
+    if (role === "ADMIN" && (searchParams.get("all") === "true" || searchParams.has("status") || searchParams.has("ownerId"))) {
+      const status = searchParams.get("status") ?? undefined
+      const visibility = searchParams.get("visibility") ?? undefined
+      const subjectId = searchParams.get("subjectId") ?? undefined
+      const ownerId = searchParams.get("ownerId") ?? undefined
+      const search = searchParams.get("search") ?? undefined
+
+      const adminResult = await getAdminDocuments(page, pageSize, {
+        status,
+        visibility,
+        subjectId,
+        ownerId,
+        search,
+      })
+      return NextResponse.json(adminResult)
+    }
 
     const result = await getUserDocuments(userId, page, pageSize)
     return NextResponse.json(result)
