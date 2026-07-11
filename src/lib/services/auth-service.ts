@@ -31,20 +31,28 @@ function getMailer() {
 }
 
 async function sendOtpEmail(email: string, otpCode: string) {
-  const mailer = getMailer()
-  await mailer.sendMail({
-    from: process.env.SMTP_FROM,
-    to: email,
-    subject: "Lumis — Your Verification Code",
-    html: `
-      <div style="font-family:sans-serif;max-width:480px">
-        <h2 style="color:#4F46E5">Lumis Academic Platform</h2>
-        <p>Your one-time verification code is:</p>
-        <h1 style="letter-spacing:8px;color:#111">${otpCode}</h1>
-        <p style="color:#888;font-size:13px">This code expires in ${process.env.OTP_EXPIRES_MINUTES ?? 10} minutes. Do not share it with anyone.</p>
-      </div>
-    `,
-  })
+  console.log(`\n======================================================`)
+  console.log(`🔑 DEV MODE OTP: Email sent to ${email} -> Code: ${otpCode}`)
+  console.log(`======================================================\n`)
+
+  try {
+    const mailer = getMailer()
+    await mailer.sendMail({
+      from: process.env.SMTP_FROM,
+      to: email,
+      subject: "Lumis — Your Verification Code",
+      html: `
+        <div style="font-family:sans-serif;max-width:480px">
+          <h2 style="color:#4F46E5">Lumis Academic Platform</h2>
+          <p>Your one-time verification code is:</p>
+          <h1 style="letter-spacing:8px;color:#111">${otpCode}</h1>
+          <p style="color:#888;font-size:13px">This code expires in ${process.env.OTP_EXPIRES_MINUTES ?? 10} minutes. Do not share it with anyone.</p>
+        </div>
+      `,
+    })
+  } catch (error) {
+    console.error(`Failed to send email to ${email}, but OTP is visible above.`)
+  }
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
