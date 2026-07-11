@@ -26,7 +26,9 @@ function getMailer() {
   return nodemailer.createTransport({
     host: process.env.SMTP_HOST,
     port: Number(process.env.SMTP_PORT ?? 587),
+    secure: false, // true for 465, false for 587 (STARTTLS)
     auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS },
+    tls: { rejectUnauthorized: false },
   })
 }
 
@@ -103,7 +105,7 @@ async function sendOtpEmail(email: string, otpCode: string) {
       `,
     })
   } catch (error) {
-    console.error(`Failed to send email to ${email}, but OTP is visible above.`)
+    console.error(`Failed to send email to ${email}, but OTP is visible above.`, error)
   }
 }
 
@@ -169,7 +171,7 @@ async function sendPasswordResetEmail(email: string, otpCode: string) {
       `,
     })
   } catch (error) {
-    console.error(`Failed to send email to ${email}, but OTP is visible above.`)
+    console.error(`Failed to send email to ${email}, but OTP is visible above.`, error)
   }
 }
 
@@ -244,6 +246,27 @@ export async function forgotPassword(input: ForgotPasswordInput) {
   await sendPasswordResetEmail(input.email, otpCode)
 
   return { message: "If an active account exists, an OTP has been sent." }
+}
+
+export async function verifyResetOtp(email: string, otpCode: string) {
+  const otp = await db.oneTimePassword.findFirst({
+    where: { email },
+    orderBy: { createdAt: "desc" },
+  })
+
+  if (!otp) throw new Error("No pending OTP found for this email.")
+  if (otp.attempts >= 3) throw new Error("Đã nhập sai quá nhiều lần. Vui lòng yêu cầu mã mới.")
+  if (new Date() > otp.expiresAt) throw new Error("Mã OTP đã hết hạn. Vui lòng yêu cầu mã mới.")
+
+  if (otp.otpCode !== otpCode) {
+    await db.oneTimePassword.update({
+      where: { id: otp.id },
+      data: { attempts: { increment: 1 } },
+    })
+    throw new Error("Mã OTP không đúng. Vui lòng kiểm tra lại.")
+  }
+
+  return { message: "OTP verified." }
 }
 
 export async function resetPassword(input: ResetPasswordInput) {
