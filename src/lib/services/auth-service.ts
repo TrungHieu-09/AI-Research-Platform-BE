@@ -2,7 +2,7 @@ import { db } from "@/lib/db"
 import bcrypt from "bcryptjs"
 import { SignJWT } from "jose"
 import nodemailer from "nodemailer"
-import type { SignupInput, LoginInput, VerifyOtpInput, GoogleAuthInput } from "@/lib/validation/auth"
+import type { SignupInput, LoginInput, VerifyOtpInput, GoogleAuthInput, ForgotPasswordInput, ResetPasswordInput } from "@/lib/validation/auth"
 
 const JWT_SECRET = new TextEncoder().encode(process.env.JWT_SECRET!)
 
@@ -107,6 +107,72 @@ async function sendOtpEmail(email: string, otpCode: string) {
   }
 }
 
+async function sendPasswordResetEmail(email: string, otpCode: string) {
+  console.log(`\n======================================================`)
+  console.log(`🔑 DEV MODE OTP (RESET): Email sent to ${email} -> Code: ${otpCode}`)
+  console.log(`======================================================\n`)
+
+  try {
+    const mailer = getMailer()
+    await mailer.sendMail({
+      from: process.env.SMTP_FROM,
+      to: email,
+      subject: "Lumis — Đặt lại mật khẩu",
+      html: `
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <meta charset="utf-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
+          <title>Đặt lại mật khẩu Lumis</title>
+        </head>
+        <body style="margin:0;padding:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;background-color:#f8f9ff;color:#121c2a;">
+          <table width="100%" cellpadding="0" cellspacing="0" style="background-color:#f8f9ff;padding:40px 0;">
+            <tr>
+              <td align="center">
+                <table width="100%" max-width="500" cellpadding="0" cellspacing="0" style="background-color:#ffffff;border-radius:24px;border:1px solid #eef4ff;box-shadow:0 12px 40px rgba(0,88,190,0.05);overflow:hidden;max-width:500px;margin:0 auto;">
+                  <tr>
+                    <td align="center" style="padding:40px 40px 20px;background:linear-gradient(135deg, #0058be 0%, #0051d5 100%);">
+                      <h1 style="color:#ffffff;font-size:28px;font-weight:700;margin:0;letter-spacing:-0.5px;">Lumis</h1>
+                      <p style="color:#adc6ff;font-size:15px;margin:8px 0 0;">Yêu cầu đặt lại mật khẩu</p>
+                    </td>
+                  </tr>
+                  <tr>
+                    <td style="padding:40px;">
+                      <h2 style="font-size:20px;font-weight:600;margin:0 0 16px;">Xin chào,</h2>
+                      <p style="font-size:15px;line-height:1.6;color:#424754;margin:0 0 32px;">
+                        Chúng tôi nhận được yêu cầu đặt lại mật khẩu cho tài khoản của bạn. Vui lòng sử dụng mã xác thực dưới đây để tiến hành đổi mật khẩu:
+                      </p>
+                      <div style="background-color:#f8f9ff;border:1px solid #c2c6d6;border-radius:16px;padding:24px;text-align:center;margin-bottom:32px;">
+                        <span style="font-family:monospace;font-size:36px;font-weight:700;letter-spacing:12px;color:#0058be;display:inline-block;margin-left:12px;">
+                          ${otpCode}
+                        </span>
+                      </div>
+                      <p style="font-size:14px;color:#727785;margin:0 0 8px;text-align:center;">
+                        Mã này sẽ hết hạn sau <b>${process.env.OTP_EXPIRES_MINUTES ?? 10} phút</b>.
+                      </p>
+                    </td>
+                  </tr>
+                  <tr>
+                    <td align="center" style="padding:24px;background-color:#f8f9ff;border-top:1px solid #eef4ff;">
+                      <p style="font-size:12px;color:#a0a4b0;margin:0;">
+                        © ${new Date().getFullYear()} Lumis Academic Platform. All rights reserved.
+                      </p>
+                    </td>
+                  </tr>
+                </table>
+              </td>
+            </tr>
+          </table>
+        </body>
+        </html>
+      `,
+    })
+  } catch (error) {
+    console.error(`Failed to send email to ${email}, but OTP is visible above.`)
+  }
+}
+
 // ──────────────────────────────────────────────────────────────────────────────
 // Service methods
 // ──────────────────────────────────────────────────────────────────────────────
@@ -155,6 +221,60 @@ export async function registerUser(input: SignupInput) {
   await sendOtpEmail(input.email, otpCode)
 
   return { message: "Registration initiated. Please verify your email with the OTP sent." }
+}
+
+export async function forgotPassword(input: ForgotPasswordInput) {
+  const existing = await db.user.findUnique({ where: { email: input.email } })
+  if (!existing || existing.status === "UNVERIFIED") {
+    // Return success to avoid email enumeration attacks
+    return { message: "If an active account exists, an OTP has been sent." }
+  }
+
+  // Generate 6-digit OTP
+  const otpCode = Math.floor(100000 + Math.random() * 900000).toString()
+  const expiresAt = new Date(Date.now() + Number(process.env.OTP_EXPIRES_MINUTES ?? 10) * 60_000)
+
+  // Invalidate previous OTPs for this email
+  await db.oneTimePassword.deleteMany({ where: { email: input.email } })
+
+  await db.oneTimePassword.create({
+    data: { email: input.email, otpCode, expiresAt },
+  })
+
+  await sendPasswordResetEmail(input.email, otpCode)
+
+  return { message: "If an active account exists, an OTP has been sent." }
+}
+
+export async function resetPassword(input: ResetPasswordInput) {
+  const otp = await db.oneTimePassword.findFirst({
+    where: { email: input.email },
+    orderBy: { createdAt: "desc" },
+  })
+
+  if (!otp) throw new Error("No pending OTP found for this email.")
+  if (otp.attempts >= 3) throw new Error("Maximum OTP attempts reached. Please request a new code.")
+  if (new Date() > otp.expiresAt) throw new Error("OTP has expired. Please request a new code.")
+
+  if (otp.otpCode !== input.otpCode) {
+    await db.oneTimePassword.update({
+      where: { id: otp.id },
+      data: { attempts: { increment: 1 } },
+    })
+    throw new Error("Invalid OTP code.")
+  }
+
+  const passwordHash = await bcrypt.hash(input.password, 12)
+
+  await db.user.update({
+    where: { email: input.email },
+    data: { passwordHash },
+  })
+
+  // Clean up OTP record
+  await db.oneTimePassword.delete({ where: { id: otp.id } })
+
+  return { message: "Password reset successfully." }
 }
 
 export async function verifyOtp(input: VerifyOtpInput) {
