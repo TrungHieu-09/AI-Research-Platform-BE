@@ -31,7 +31,7 @@ import { db } from "@/lib/db"
  *                 enum: [STUDENT, ADMIN]
  *               status:
  *                 type: string
- *                 enum: [ACTIVE, SUSPENDED]
+ *                 enum: [ACTIVE, UNVERIFIED, SUSPENDED]
  *               tier:
  *                 type: string
  *                 enum: [FREE, PREMIUM]
@@ -50,7 +50,7 @@ import { db } from "@/lib/db"
  *                     name: { type: string }
  *                     email: { type: string }
  *                     role: { type: string, enum: [STUDENT, ADMIN] }
- *                     status: { type: string, enum: [ACTIVE, SUSPENDED] }
+ *                     status: { type: string, enum: [ACTIVE, UNVERIFIED, SUSPENDED] }
  *                     tier: { type: string, enum: [FREE, PREMIUM] }
  *                     updatedAt: { type: string, format: date-time }
  *       400:
@@ -84,7 +84,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
 
     const updateData: any = {}
     if (role && (role === "STUDENT" || role === "ADMIN")) updateData.role = role
-    if (status && (status === "ACTIVE" || status === "SUSPENDED")) updateData.status = status
+    if (status && (status === "ACTIVE" || status === "UNVERIFIED" || status === "SUSPENDED")) updateData.status = status
     if (tier && (tier === "FREE" || tier === "PREMIUM")) updateData.tier = tier
 
     const updatedUser = await db.user.update({

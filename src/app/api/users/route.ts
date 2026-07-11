@@ -30,7 +30,7 @@ import { db } from "@/lib/db"
  *         name: status
  *         schema:
  *           type: string
- *           enum: [ACTIVE, SUSPENDED]
+ *           enum: [ACTIVE, UNVERIFIED, SUSPENDED]
  *         description: Filter by account status.
  *     responses:
  *       200:
@@ -50,7 +50,7 @@ import { db } from "@/lib/db"
  *                       email: { type: string, example: "student@fpt.edu.vn" }
  *                       avatarUrl: { type: string, nullable: true }
  *                       role: { type: string, enum: [STUDENT, ADMIN] }
- *                       status: { type: string, enum: [ACTIVE, SUSPENDED] }
+ *                       status: { type: string, enum: [ACTIVE, UNVERIFIED, SUSPENDED] }
  *                       tier: { type: string, enum: [FREE, PREMIUM] }
  *                       _count:
  *                         type: object
@@ -83,7 +83,7 @@ export async function GET(req: NextRequest) {
     if (filterRole && (filterRole === "STUDENT" || filterRole === "ADMIN")) {
       whereClause.role = filterRole
     }
-    if (filterStatus && (filterStatus === "ACTIVE" || filterStatus === "SUSPENDED")) {
+    if (filterStatus && (filterStatus === "ACTIVE" || filterStatus === "UNVERIFIED" || filterStatus === "SUSPENDED")) {
       whereClause.status = filterStatus
     }
 

@@ -53,7 +53,9 @@ async function sendOtpEmail(email: string, otpCode: string) {
 
 export async function registerUser(input: SignupInput) {
   const existing = await db.user.findUnique({ where: { email: input.email } })
-  if (existing) throw new Error("An account with this email already exists.")
+  if (existing && existing.status !== "UNVERIFIED") {
+    throw new Error("An account with this email already exists.")
+  }
 
   const passwordHash = await bcrypt.hash(input.password, 12)
 
@@ -61,16 +63,27 @@ export async function registerUser(input: SignupInput) {
   const otpCode = Math.floor(100000 + Math.random() * 900000).toString()
   const expiresAt = new Date(Date.now() + Number(process.env.OTP_EXPIRES_MINUTES ?? 10) * 60_000)
 
-  // Store as pending (user not yet activated — stored in OTP table temporarily)
-  // We also create the user record upfront with SUSPENDED status; OTP verify activates it
-  const user = await db.user.create({
-    data: {
-      name: input.name,
-      email: input.email,
-      passwordHash,
-      status: "SUSPENDED", // Activated after OTP verification
-    },
-  })
+  if (existing) {
+    // Update existing unverified user with new details and trigger new OTP
+    await db.user.update({
+      where: { id: existing.id },
+      data: {
+        name: input.name,
+        passwordHash,
+      },
+    })
+  } else {
+    // Store as pending (user not yet activated — stored in OTP table temporarily)
+    // We also create the user record upfront with UNVERIFIED status; OTP verify activates it
+    await db.user.create({
+      data: {
+        name: input.name,
+        email: input.email,
+        passwordHash,
+        status: "UNVERIFIED", // Activated after OTP verification
+      },
+    })
+  }
 
   // Invalidate previous OTPs for this email
   await db.oneTimePassword.deleteMany({ where: { email: input.email } })
@@ -119,6 +132,7 @@ export async function loginUser(input: LoginInput) {
   const user = await db.user.findUnique({ where: { email: input.email } })
   if (!user) throw new Error("Invalid email or password.")
   if (user.status === "SUSPENDED") throw new Error("Your account is suspended. Please contact support.")
+  if (user.status === "UNVERIFIED") throw new Error("Please verify your email with the OTP code sent before logging in.")
   if (!user.passwordHash) throw new Error("This account was registered via Google SSO. Please sign in with Google.")
 
   const valid = await bcrypt.compare(input.password, user.passwordHash)
@@ -133,10 +147,13 @@ export async function googleLoginUser(input: GoogleAuthInput) {
 
   if (user) {
     if (user.status === "SUSPENDED") throw new Error("Your account is suspended. Please contact support.")
-    if (input.avatarUrl && !user.avatarUrl) {
+    if (user.status === "UNVERIFIED" || (input.avatarUrl && !user.avatarUrl)) {
       user = await db.user.update({
         where: { id: user.id },
-        data: { avatarUrl: input.avatarUrl }
+        data: {
+          status: "ACTIVE",
+          avatarUrl: input.avatarUrl || user.avatarUrl,
+        }
       })
     }
   } else {

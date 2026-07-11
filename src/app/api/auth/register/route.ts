@@ -7,7 +7,7 @@ import { registerUser } from "@/lib/services/auth-service"
  * /api/auth/register:
  *   post:
  *     summary: User Registration
- *     description: Register a new student account and trigger an OTP verification email. Account starts in SUSPENDED status until OTP is verified.
+ *     description: Register a new student account and trigger an OTP verification email. Account starts in UNVERIFIED status until OTP is verified. If the email already exists in UNVERIFIED status, resends OTP and updates account details.
  *     tags:
  *       - Authentication
  *     requestBody:
