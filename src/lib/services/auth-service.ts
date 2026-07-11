@@ -42,12 +42,64 @@ async function sendOtpEmail(email: string, otpCode: string) {
       to: email,
       subject: "Lumis — Your Verification Code",
       html: `
-        <div style="font-family:sans-serif;max-width:480px">
-          <h2 style="color:#4F46E5">Lumis Academic Platform</h2>
-          <p>Your one-time verification code is:</p>
-          <h1 style="letter-spacing:8px;color:#111">${otpCode}</h1>
-          <p style="color:#888;font-size:13px">This code expires in ${process.env.OTP_EXPIRES_MINUTES ?? 10} minutes. Do not share it with anyone.</p>
-        </div>
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <meta charset="utf-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
+          <title>Xác thực tài khoản Lumis</title>
+        </head>
+        <body style="margin:0;padding:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;background-color:#f8f9ff;color:#121c2a;">
+          <table width="100%" cellpadding="0" cellspacing="0" style="background-color:#f8f9ff;padding:40px 0;">
+            <tr>
+              <td align="center">
+                <table width="100%" max-width="500" cellpadding="0" cellspacing="0" style="background-color:#ffffff;border-radius:24px;border:1px solid #eef4ff;box-shadow:0 12px 40px rgba(0,88,190,0.05);overflow:hidden;max-width:500px;margin:0 auto;">
+                  
+                  <!-- Header -->
+                  <tr>
+                    <td align="center" style="padding:40px 40px 20px;background:linear-gradient(135deg, #0058be 0%, #0051d5 100%);">
+                      <h1 style="color:#ffffff;font-size:28px;font-weight:700;margin:0;letter-spacing:-0.5px;">Lumis</h1>
+                      <p style="color:#adc6ff;font-size:15px;margin:8px 0 0;">Nền tảng Nghiên cứu AI</p>
+                    </td>
+                  </tr>
+
+                  <!-- Body -->
+                  <tr>
+                    <td style="padding:40px;">
+                      <h2 style="font-size:20px;font-weight:600;margin:0 0 16px;">Xin chào,</h2>
+                      <p style="font-size:15px;line-height:1.6;color:#424754;margin:0 0 32px;">
+                        Cảm ơn bạn đã tham gia cộng đồng Lumis. Để hoàn tất việc đăng ký và truy cập vào Không gian làm việc, vui lòng sử dụng mã xác thực dưới đây:
+                      </p>
+
+                      <div style="background-color:#f8f9ff;border:1px solid #c2c6d6;border-radius:16px;padding:24px;text-align:center;margin-bottom:32px;">
+                        <span style="font-family:monospace;font-size:36px;font-weight:700;letter-spacing:12px;color:#0058be;display:inline-block;margin-left:12px;">
+                          ${otpCode}
+                        </span>
+                      </div>
+
+                      <p style="font-size:14px;color:#727785;margin:0 0 8px;text-align:center;">
+                        Mã này sẽ hết hạn sau <b>${process.env.OTP_EXPIRES_MINUTES ?? 10} phút</b>.
+                      </p>
+                      <p style="font-size:13px;color:#a0a4b0;margin:0;text-align:center;">
+                        Nếu bạn không yêu cầu mã này, vui lòng bỏ qua email.
+                      </p>
+                    </td>
+                  </tr>
+
+                  <!-- Footer -->
+                  <tr>
+                    <td align="center" style="padding:24px;background-color:#f8f9ff;border-top:1px solid #eef4ff;">
+                      <p style="font-size:12px;color:#a0a4b0;margin:0;">
+                        © ${new Date().getFullYear()} Lumis Academic Platform. All rights reserved.
+                      </p>
+                    </td>
+                  </tr>
+                </table>
+              </td>
+            </tr>
+          </table>
+        </body>
+        </html>
       `,
     })
   } catch (error) {
