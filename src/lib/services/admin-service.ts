@@ -69,3 +69,74 @@ export async function getAdminDocumentStats(from?: string, to?: string, subjectI
     message: "Document analytics are currently based on document metadata until document_views is populated.",
   }
 }
+
+export async function getAdminDocuments(
+  page = 1,
+  pageSize = 20,
+  filters: {
+    status?: string
+    visibility?: string
+    subjectId?: string
+    ownerId?: string
+    search?: string
+  } = {}
+) {
+  const skip = (page - 1) * pageSize
+  const whereClause: any = { deletedAt: null }
+
+  if (filters.status && ["PENDING", "APPROVED", "REJECTED"].includes(filters.status)) {
+    whereClause.status = filters.status
+  }
+  if (filters.visibility && ["PRIVATE", "PUBLIC"].includes(filters.visibility)) {
+    whereClause.visibility = filters.visibility
+  }
+  if (filters.subjectId) {
+    whereClause.subjectId = filters.subjectId
+  }
+  if (filters.ownerId) {
+    whereClause.ownerId = filters.ownerId
+  }
+  if (filters.search) {
+    whereClause.OR = [
+      { title: { contains: filters.search, mode: "insensitive" } },
+      { owner: { email: { contains: filters.search, mode: "insensitive" } } },
+      { owner: { name: { contains: filters.search, mode: "insensitive" } } },
+    ]
+  }
+
+  const [items, total] = await Promise.all([
+    db.document.findMany({
+      where: whereClause,
+      orderBy: { createdAt: "desc" },
+      skip,
+      take: pageSize,
+      select: {
+        id: true,
+        title: true,
+        description: true,
+        status: true,
+        visibility: true,
+        rejectionReason: true,
+        mimeType: true,
+        fileSize: true,
+        pageCount: true,
+        fileUrl: true,
+        owner: { select: { id: true, name: true, email: true, avatarUrl: true } },
+        subject: { select: { id: true, name: true, code: true } },
+        moderatedBy: { select: { id: true, name: true } },
+        moderatedAt: true,
+        createdAt: true,
+        updatedAt: true,
+      },
+    }),
+    db.document.count({ where: whereClause }),
+  ])
+
+  return {
+    items,
+    total,
+    page,
+    pageSize,
+    totalPages: Math.ceil(total / pageSize),
+  }
+}
