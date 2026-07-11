@@ -42,7 +42,13 @@ async function sendOtpEmail(email: string, otpCode: string) {
     await mailer.sendMail({
       from: process.env.SMTP_FROM,
       to: email,
-      subject: "Lumis — Your Verification Code",
+      subject: "Lumis — Mã xác thực tài khoản của bạn",
+      headers: {
+        "X-Priority": "1",
+        "X-MSMail-Priority": "High",
+        "Importance": "high",
+      },
+      text: `Mã xác thực của bạn là: ${otpCode}. Mã này sẽ hết hạn sau ${process.env.OTP_EXPIRES_MINUTES ?? 10} phút. Vui lòng không chia sẻ mã này với bất kỳ ai.`,
       html: `
         <!DOCTYPE html>
         <html>
@@ -120,6 +126,12 @@ async function sendPasswordResetEmail(email: string, otpCode: string) {
       from: process.env.SMTP_FROM,
       to: email,
       subject: "Lumis — Đặt lại mật khẩu",
+      headers: {
+        "X-Priority": "1",
+        "X-MSMail-Priority": "High",
+        "Importance": "high",
+      },
+      text: `Mã đặt lại mật khẩu của bạn là: ${otpCode}. Mã này sẽ hết hạn sau ${process.env.OTP_EXPIRES_MINUTES ?? 10} phút. Nếu bạn không yêu cầu điều này, hãy bỏ qua email này.`,
       html: `
         <!DOCTYPE html>
         <html>
@@ -227,9 +239,9 @@ export async function registerUser(input: SignupInput) {
 
 export async function forgotPassword(input: ForgotPasswordInput) {
   const existing = await db.user.findUnique({ where: { email: input.email } })
-  if (!existing || existing.status === "UNVERIFIED") {
+  if (!existing) {
     // Return success to avoid email enumeration attacks
-    return { message: "If an active account exists, an OTP has been sent." }
+    return { message: "If an account exists, an OTP has been sent." }
   }
 
   // Generate 6-digit OTP
@@ -245,7 +257,7 @@ export async function forgotPassword(input: ForgotPasswordInput) {
 
   await sendPasswordResetEmail(input.email, otpCode)
 
-  return { message: "If an active account exists, an OTP has been sent." }
+  return { message: "If an account exists, an OTP has been sent." }
 }
 
 export async function verifyResetOtp(email: string, otpCode: string) {
@@ -291,7 +303,10 @@ export async function resetPassword(input: ResetPasswordInput) {
 
   await db.user.update({
     where: { email: input.email },
-    data: { passwordHash },
+    data: { 
+      passwordHash,
+      status: "ACTIVE" // Verify the user if they were UNVERIFIED
+    },
   })
 
   // Clean up OTP record
