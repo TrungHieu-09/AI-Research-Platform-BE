@@ -38,6 +38,21 @@ const ROUTE_RULES: { path: string; minRole: Role }[] = [
 // ──────────────────────────────────────────────────────────────────────────────
 
 export async function proxy(request: NextRequest) {
+  const origin = request.headers.get("origin") ?? "*"
+
+  // Handle CORS Preflight
+  if (request.method === "OPTIONS") {
+    return new NextResponse(null, {
+      status: 200,
+      headers: {
+        "Access-Control-Allow-Origin": origin,
+        "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS, PATCH",
+        "Access-Control-Allow-Headers": "Content-Type, Authorization, x-user-id, x-user-role",
+        "Access-Control-Allow-Credentials": "true",
+      },
+    })
+  }
+
   const pathname = request.nextUrl.pathname
 
   // Find the most specific (longest path) matching rule
@@ -46,12 +61,24 @@ export async function proxy(request: NextRequest) {
   )[0]
 
   // No rule matched — allow request through (public routes like /api/auth/*)
-  if (!matchedRule) return NextResponse.next()
+  if (!matchedRule) {
+    const response = NextResponse.next()
+    response.headers.set("Access-Control-Allow-Origin", origin)
+    return response
+  }
 
   const token = request.headers.get("Authorization")?.split(" ")[1]
 
   if (!token) {
-    return NextResponse.json({ error: "Authentication token required." }, { status: 401 })
+    return NextResponse.json(
+      { error: "Authentication token required." },
+      {
+        status: 401,
+        headers: {
+          "Access-Control-Allow-Origin": origin,
+        },
+      }
+    )
   }
 
   try {
@@ -63,7 +90,12 @@ export async function proxy(request: NextRequest) {
     if ((ROLE_HIERARCHY[userRole] ?? 0) < ROLE_HIERARCHY[matchedRule.minRole]) {
       return NextResponse.json(
         { error: `Access denied. Required role: ${matchedRule.minRole}.` },
-        { status: 403 },
+        {
+          status: 403,
+          headers: {
+            "Access-Control-Allow-Origin": origin,
+          },
+        },
       )
     }
 
@@ -73,9 +105,19 @@ export async function proxy(request: NextRequest) {
     requestHeaders.set("x-user-role", userRole)
     requestHeaders.set("x-user-tier", (payload.tier as string) ?? "FREE")
 
-    return NextResponse.next({ request: { headers: requestHeaders } })
+    const response = NextResponse.next({ request: { headers: requestHeaders } })
+    response.headers.set("Access-Control-Allow-Origin", origin)
+    return response
   } catch {
-    return NextResponse.json({ error: "Invalid or expired session token." }, { status: 401 })
+    return NextResponse.json(
+      { error: "Invalid or expired session token." },
+      {
+        status: 401,
+        headers: {
+          "Access-Control-Allow-Origin": origin,
+        },
+      }
+    )
   }
 }
 
