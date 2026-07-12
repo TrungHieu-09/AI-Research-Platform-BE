@@ -37,7 +37,7 @@ const ROUTE_RULES: { path: string; minRole: Role }[] = [
 // Middleware
 // ──────────────────────────────────────────────────────────────────────────────
 
-export async function middleware(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   const pathname = request.nextUrl.pathname
 
   // Find the most specific (longest path) matching rule
