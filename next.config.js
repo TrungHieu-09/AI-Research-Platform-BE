@@ -2,7 +2,7 @@
 const nextConfig = {
   // Disable the default Next.js page/app router pages for a pure API server
   // Keep this config minimal since this project is API-only (no UI pages needed here)
-  serverExternalPackages: ["@prisma/client", "bcryptjs"],
+  serverExternalPackages: ["@prisma/client", "bcryptjs", "pdf-parse", "@google/generative-ai"],
 
   // CORS headers — allow requests from the client (localhost:3000) and any deployed domain
   async headers() {

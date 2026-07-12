@@ -37,7 +37,7 @@ const ROUTE_RULES: { path: string; minRole: Role }[] = [
 // Middleware
 // ──────────────────────────────────────────────────────────────────────────────
 
-export async function proxy(request: NextRequest) {
+export default async function proxy(request: NextRequest) {
   const origin = request.headers.get("origin") ?? "*"
 
   // Handle CORS Preflight
