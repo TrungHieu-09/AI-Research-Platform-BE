@@ -6,11 +6,12 @@ const nextConfig = {
 
   // CORS headers — allow requests from the client (localhost:3000) and any deployed domain
   async headers() {
+    const clientOrigin = process.env.CLIENT_ORIGIN ?? "http://localhost:3000"
     return [
       {
         source: "/api/:path*",
         headers: [
-          { key: "Access-Control-Allow-Origin", value: process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000" },
+          { key: "Access-Control-Allow-Origin", value: clientOrigin },
           { key: "Access-Control-Allow-Methods", value: "GET,POST,PUT,PATCH,DELETE,OPTIONS" },
           { key: "Access-Control-Allow-Headers", value: "Content-Type, Authorization" },
           { key: "Access-Control-Allow-Credentials", value: "true" },
@@ -21,3 +22,4 @@ const nextConfig = {
 }
 
 module.exports = nextConfig
+
