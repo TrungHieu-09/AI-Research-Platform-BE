@@ -139,6 +139,18 @@ export async function moderateDocument(
     },
   })
 
+  // Tự động tạo thông báo (Notification) cho chủ sở hữu tài liệu kèm lý do từ chối nếu có
+  await db.notification.create({
+    data: {
+      userId: doc.ownerId,
+      title: input.decision === "APPROVED" ? "Tài liệu đã được phê duyệt" : "Tài liệu bị từ chối",
+      content:
+        input.decision === "APPROVED"
+          ? `Tài liệu "${doc.title}" của bạn đã được Admin kiểm duyệt và phê duyệt công khai.`
+          : `Tài liệu "${doc.title}" của bạn đã bị từ chối với lý do: ${input.rejectionReason}`,
+    },
+  })
+
   // Auto-trigger vector ingestion in the background when Admin approves a public document
   if (updated.status === "APPROVED") {
     autoIngestDocument(updated.id, updated.fileUrl).catch((err) => {
