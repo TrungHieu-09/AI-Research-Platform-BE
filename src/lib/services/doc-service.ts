@@ -119,8 +119,16 @@ export async function getDocumentById(id: string, requestingUserId: string, requ
   const doc = await db.document.findFirst({
     where: { id, deletedAt: null },
     include: {
-      owner: { select: { id: true, name: true, email: true } },
+      owner: { select: { id: true, name: true, email: true, avatarUrl: true } },
       subject: true,
+      tags: { select: { id: true, name: true } },
+      _count: {
+        select: {
+          views: true,
+          ratings: true,
+          bookmarks: true,
+        },
+      },
     },
   })
 
@@ -131,6 +139,13 @@ export async function getDocumentById(id: string, requestingUserId: string, requ
     if (requestingRole !== "ADMIN") {
       throw new Error("Forbidden: This document is private.")
     }
+  }
+
+  // Record a view in background without blocking
+  if (requestingUserId) {
+    db.documentView.create({
+      data: { documentId: doc.id, userId: requestingUserId },
+    }).catch((e) => console.error("[Record View Error]:", e.message))
   }
 
   return doc
