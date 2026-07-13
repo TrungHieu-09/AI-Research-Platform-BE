@@ -44,8 +44,9 @@ import { db } from "@/lib/db"
  *       404:
  *         description: Suggestion not found.
  */
-export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
+export async function POST(req: NextRequest, context: { params: Promise<{ id: string }> }) {
   try {
+    const { id } = await Promise.resolve(context.params);
     const role = req.headers.get("x-user-role")
     if (role !== "ADMIN") {
       return NextResponse.json({ error: "Access denied. Admin role required." }, { status: 403 })
@@ -57,14 +58,14 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     }
 
     const body = await req.json()
-    const { action } = body
+    const { action, code: bodyCode } = body
 
     if (action !== "APPROVED" && action !== "REJECTED") {
       return NextResponse.json({ error: "Invalid action. Must be APPROVED or REJECTED." }, { status: 400 })
     }
 
     const suggestion = await db.subjectSuggestion.findUnique({
-      where: { id: params.id }
+      where: { id }
     })
 
     if (!suggestion) {
@@ -77,7 +78,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
 
     let newSubject = null
     if (action === "APPROVED") {
-      let code = body.code ? String(body.code).trim().toUpperCase() : ""
+      let code = bodyCode ? String(bodyCode).trim().toUpperCase() : ""
       if (!code) {
         const cleanName = suggestion.name
           .toUpperCase()
@@ -118,7 +119,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
 
     // Update suggestion status and link subjectId
     const updatedSuggestion = await db.subjectSuggestion.update({
-      where: { id: params.id },
+      where: { id },
       data: {
         status: action,
         ...(newSubject && { subjectId: newSubject.id })
@@ -132,8 +133,8 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
         userId: adminId,
         action: `SUGGESTION_${action}`,
         targetEntity: "subject_suggestions",
-        targetId: params.id,
-        ipAddress: req.headers.get("x-forwarded-for") ?? req.ip
+        targetId: id,
+        ipAddress: req.headers.get("x-forwarded-for") || "127.0.0.1"
       }
     })
 

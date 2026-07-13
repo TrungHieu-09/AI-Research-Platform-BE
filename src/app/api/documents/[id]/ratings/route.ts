@@ -108,9 +108,10 @@ import { CreateRatingSchema, UpdateRatingSchema } from "@/lib/validation/interac
  */
 
 // GET /api/documents/[id]/ratings
-export async function GET(_req: NextRequest, { params }: { params: { id: string } }) {
+export async function GET(_req: NextRequest, context: { params: Promise<{ id: string }> }) {
   try {
-    const ratings = await getDocumentRatings(params.id)
+    const { id } = await Promise.resolve(context.params);
+    const ratings = await getDocumentRatings(id)
     return NextResponse.json(ratings, { status: 200 })
   } catch (err: any) {
     return NextResponse.json({ error: err.message ?? "Failed to fetch ratings." }, { status: 500 })
@@ -118,8 +119,9 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
 }
 
 // POST /api/documents/[id]/ratings
-export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
+export async function POST(req: NextRequest, context: { params: Promise<{ id: string }> }) {
   try {
+    const { id } = await Promise.resolve(context.params);
     const userId = req.headers.get("x-user-id")
     if (!userId) return NextResponse.json({ error: "Authentication required." }, { status: 401 })
 
@@ -129,7 +131,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       return NextResponse.json({ error: parsed.error.flatten().fieldErrors }, { status: 422 })
     }
 
-    const rating = await createDocumentRating(params.id, userId, parsed.data)
+    const rating = await createDocumentRating(id, userId, parsed.data)
     return NextResponse.json(rating, { status: 201 })
   } catch (err: any) {
     const status = err.message === "Document not found." ? 404 : 400
@@ -138,8 +140,9 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
 }
 
 // PUT /api/documents/[id]/ratings
-export async function PUT(req: NextRequest, { params }: { params: { id: string } }) {
+export async function PUT(req: NextRequest, context: { params: Promise<{ id: string }> }) {
   try {
+    const { id } = await Promise.resolve(context.params);
     const userId = req.headers.get("x-user-id")
     if (!userId) return NextResponse.json({ error: "Authentication required." }, { status: 401 })
 
@@ -149,7 +152,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
       return NextResponse.json({ error: parsed.error.flatten().fieldErrors }, { status: 422 })
     }
 
-    const rating = await updateDocumentRating(params.id, userId, parsed.data)
+    const rating = await updateDocumentRating(id, userId, parsed.data)
     return NextResponse.json(rating, { status: 200 })
   } catch (err: any) {
     const status = err.message?.includes("not found") ? 404 : 400

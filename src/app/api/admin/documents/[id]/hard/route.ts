@@ -33,8 +33,9 @@ import { db } from "@/lib/db"
  *       404:
  *         description: Document not found.
  */
-export async function DELETE(req: NextRequest, { params }: { params: { id: string } }) {
+export async function DELETE(req: NextRequest, context: { params: Promise<{ id: string }> }) {
   try {
+    const { id } = await Promise.resolve(context.params);
     const role = req.headers.get("x-user-role")
     const adminId = req.headers.get("x-user-id")
 
@@ -43,7 +44,7 @@ export async function DELETE(req: NextRequest, { params }: { params: { id: strin
     }
 
     const doc = await db.document.findUnique({
-      where: { id: params.id }
+      where: { id }
     })
 
     if (!doc) {
@@ -52,7 +53,7 @@ export async function DELETE(req: NextRequest, { params }: { params: { id: strin
 
     // Permanently delete the document from DB
     await db.document.delete({
-      where: { id: params.id }
+      where: { id }
     })
 
     await db.auditLog.create({
@@ -60,8 +61,8 @@ export async function DELETE(req: NextRequest, { params }: { params: { id: strin
         userId: adminId,
         action: "HARD_DELETE_DOCUMENT",
         targetEntity: "documents",
-        targetId: params.id,
-        ipAddress: req.headers.get("x-forwarded-for") ?? req.ip
+        targetId: id,
+        ipAddress: req.headers.get("x-forwarded-for") || "127.0.0.1"
       }
     })
 

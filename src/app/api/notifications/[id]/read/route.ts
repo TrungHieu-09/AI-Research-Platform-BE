@@ -27,14 +27,15 @@ import { markNotificationAsRead } from "@/lib/services/notification-service"
  *       404:
  *         description: Notification not found.
  */
-export async function PUT(req: NextRequest, { params }: { params: { id: string } }) {
+export async function PUT(req: NextRequest, context: { params: Promise<{ id: string }> }) {
   try {
+    const { id } = await Promise.resolve(context.params);
     const userId = req.headers.get("x-user-id")
     if (!userId) {
       return NextResponse.json({ error: "Authentication required." }, { status: 401 })
     }
 
-    const notif = await markNotificationAsRead(params.id, userId)
+    const notif = await markNotificationAsRead(id, userId)
     return NextResponse.json(notif, { status: 200 })
   } catch (error: any) {
     let status = 500

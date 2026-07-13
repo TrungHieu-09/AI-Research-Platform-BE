@@ -40,8 +40,9 @@ import { AddDocumentToCollectionSchema } from "@/lib/validation/collection"
  *       422:
  *         description: Validation error.
  */
-export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
+export async function POST(req: NextRequest, context: { params: Promise<{ id: string }> }) {
   try {
+    const { id } = await Promise.resolve(context.params);
     const userId = req.headers.get("x-user-id")
     if (!userId) return NextResponse.json({ error: "Authentication required." }, { status: 401 })
 
@@ -51,7 +52,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       return NextResponse.json({ error: parsed.error.flatten().fieldErrors }, { status: 422 })
     }
 
-    const relation = await addDocumentToCollection(params.id, userId, parsed.data)
+    const relation = await addDocumentToCollection(id, userId, parsed.data)
     return NextResponse.json(relation, { status: 200 })
   } catch (err: any) {
     const status = err.message === "Collection not found." ? 404 : err.message === "Document not found." ? 404 : 400
