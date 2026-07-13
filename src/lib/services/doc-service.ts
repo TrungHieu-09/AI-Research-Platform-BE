@@ -22,6 +22,7 @@ export async function getUserDocuments(userId: string, page = 1, pageSize = 20) 
         visibility: true,
         mimeType: true,
         fileSize: true,
+        fileUrl: true,
         subject: { select: { id: true, name: true, code: true } },
         createdAt: true,
         updatedAt: true,
