@@ -34,12 +34,12 @@ import { removeDocumentFromCollection } from "@/lib/services/collection-service"
  *       404:
  *         description: Collection or document not found.
  */
-export async function DELETE(req: NextRequest, { params }: { params: { id: string; documentId: string } }) {
+export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string; documentId: string }> }) {
   try {
     const userId = req.headers.get("x-user-id")
     if (!userId) return NextResponse.json({ error: "Authentication required." }, { status: 401 })
 
-    await removeDocumentFromCollection(params.id, userId, params.documentId)
+    await removeDocumentFromCollection((await params).id, userId, (await params).documentId)
     return NextResponse.json({ message: "Document removed from collection." }, { status: 200 })
   } catch (err: any) {
     let status = 400

@@ -44,7 +44,7 @@ import { db } from "@/lib/db"
  *       404:
  *         description: Suggestion not found.
  */
-export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
+export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const role = req.headers.get("x-user-role")
     if (role !== "ADMIN") {
@@ -64,7 +64,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     }
 
     const suggestion = await db.subjectSuggestion.findUnique({
-      where: { id: params.id }
+      where: { id: (await params).id }
     })
 
     if (!suggestion) {
@@ -118,7 +118,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
 
     // Update suggestion status and link subjectId
     const updatedSuggestion = await db.subjectSuggestion.update({
-      where: { id: params.id },
+      where: { id: (await params).id },
       data: {
         status: action,
         ...(newSubject && { subjectId: newSubject.id })
@@ -132,8 +132,8 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
         userId: adminId,
         action: `SUGGESTION_${action}`,
         targetEntity: "subject_suggestions",
-        targetId: params.id,
-        ipAddress: req.headers.get("x-forwarded-for") ?? req.ip
+        targetId: (await params).id,
+        ipAddress: req.headers.get("x-forwarded-for") ?? "unknown"
       }
     })
 

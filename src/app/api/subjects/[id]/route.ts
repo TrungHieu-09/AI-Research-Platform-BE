@@ -85,14 +85,14 @@ import { UpdateSubjectSchema } from "@/lib/validation/subject"
  *         description: Access denied (Admin role required).
  */
 // GET /api/subjects/[id]
-export async function GET(_req: NextRequest, { params }: { params: { id: string } }) {
-  const subject = await db.subject.findUnique({ where: { id: params.id } })
+export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const subject = await db.subject.findUnique({ where: { id: (await params).id } })
   if (!subject) return NextResponse.json({ error: "Subject not found." }, { status: 404 })
   return NextResponse.json(subject)
 }
 
 // PUT /api/subjects/[id] — Admin only
-export async function PUT(req: NextRequest, { params }: { params: { id: string } }) {
+export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const role = req.headers.get("x-user-role")
     if (role !== "ADMIN") {
@@ -106,7 +106,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
       return NextResponse.json({ error: parsed.error.flatten().fieldErrors }, { status: 422 })
     }
 
-    const subject = await db.subject.update({ where: { id: params.id }, data: parsed.data })
+    const subject = await db.subject.update({ where: { id: (await params).id }, data: parsed.data })
 
     if (adminId) {
       await db.auditLog.create({
@@ -115,7 +115,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
           action: "UPDATE_SUBJECT",
           targetEntity: "subjects",
           targetId: subject.id,
-          ipAddress: req.headers.get("x-forwarded-for") ?? req.ip
+          ipAddress: req.headers.get("x-forwarded-for") ?? "unknown"
         }
       })
     }
@@ -127,7 +127,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
 }
 
 // DELETE /api/subjects/[id] — Admin only (sets status to SUSPENDED)
-export async function DELETE(req: NextRequest, { params }: { params: { id: string } }) {
+export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const role = req.headers.get("x-user-role")
     if (role !== "ADMIN") {
@@ -136,7 +136,7 @@ export async function DELETE(req: NextRequest, { params }: { params: { id: strin
 
     const adminId = req.headers.get("x-user-id")
     const subject = await db.subject.update({
-      where: { id: params.id },
+      where: { id: (await params).id },
       data: { status: "SUSPENDED" },
     })
 
@@ -147,7 +147,7 @@ export async function DELETE(req: NextRequest, { params }: { params: { id: strin
           action: "SUSPEND_SUBJECT",
           targetEntity: "subjects",
           targetId: subject.id,
-          ipAddress: req.headers.get("x-forwarded-for") ?? req.ip
+          ipAddress: req.headers.get("x-forwarded-for") ?? "unknown"
         }
       })
     }

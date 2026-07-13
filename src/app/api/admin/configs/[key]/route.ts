@@ -40,7 +40,7 @@ import { UpdateConfigSchema } from "@/lib/validation/config"
  *       422:
  *         description: Validation error.
  */
-export async function PUT(req: NextRequest, { params }: { params: { key: string } }) {
+export async function PUT(req: NextRequest, { params }: { params: Promise<{ key: string }> }) {
   try {
     const role = req.headers.get("x-user-role")
     const adminId = req.headers.get("x-user-id")
@@ -54,7 +54,8 @@ export async function PUT(req: NextRequest, { params }: { params: { key: string 
       return NextResponse.json({ error: parsed.error.flatten().fieldErrors }, { status: 422 })
     }
 
-    const updated = await updateSystemConfig(params.key, adminId, parsed.data, req.headers.get("x-forwarded-for") ?? req.ip)
+    const resolvedParams = await params
+    const updated = await updateSystemConfig(resolvedParams.key, adminId, parsed.data, req.headers.get("x-forwarded-for") ?? "unknown")
     return NextResponse.json(updated, { status: 200 })
   } catch (error: any) {
     return NextResponse.json({ error: error.message ?? "Failed to update system configuration." }, { status: 400 })

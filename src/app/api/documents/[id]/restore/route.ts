@@ -35,7 +35,7 @@ import { db } from "@/lib/db"
  *       404:
  *         description: Document not found.
  */
-export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
+export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const userId = req.headers.get("x-user-id")
     const role = req.headers.get("x-user-role")
@@ -45,7 +45,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     }
 
     const doc = await db.document.findUnique({
-      where: { id: params.id }
+      where: { id: (await params).id }
     })
 
     if (!doc) {
@@ -67,7 +67,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     }
 
     const restoredDoc = await db.document.update({
-      where: { id: params.id },
+      where: { id: (await params).id },
       data: { deletedAt: null }
     })
 
@@ -77,8 +77,8 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
           userId,
           action: "RESTORE_DOCUMENT",
           targetEntity: "documents",
-          targetId: params.id,
-          ipAddress: req.headers.get("x-forwarded-for") ?? req.ip
+          targetId: (await params).id,
+          ipAddress: req.headers.get("x-forwarded-for") ?? "unknown"
         }
       })
     }

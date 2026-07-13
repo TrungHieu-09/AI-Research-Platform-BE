@@ -32,10 +32,10 @@ import path from "path"
  *       500:
  *         description: Ingestion failed.
  */
-export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
+export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const doc = await db.document.findUnique({
-      where: { id: params.id, deletedAt: null }
+      where: { id: (await params).id, deletedAt: null }
     })
 
     if (!doc) {
@@ -45,7 +45,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     const result = await autoIngestDocument(doc.id, doc.fileUrl)
     return NextResponse.json(result, { status: 200 })
   } catch (err: any) {
-    console.error(`[Ingest Error] Document ${params.id}:`, err)
+    console.error(`[Ingest Error] Document ${(await params).id}:`, err)
     return NextResponse.json({ error: err.message ?? "Failed to ingest document." }, { status: 500 })
   }
 }

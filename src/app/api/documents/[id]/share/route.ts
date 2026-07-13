@@ -49,7 +49,7 @@ import { ShareDocumentSchema } from "@/lib/validation/interaction"
  *       422:
  *         description: Validation error.
  */
-export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
+export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const ownerId = req.headers.get("x-user-id")
     if (!ownerId) return NextResponse.json({ error: "Authentication required." }, { status: 401 })
@@ -60,7 +60,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       return NextResponse.json({ error: parsed.error.flatten().fieldErrors }, { status: 422 })
     }
 
-    const share = await shareDocument(params.id, ownerId, parsed.data)
+    const share = await shareDocument((await params).id, ownerId, parsed.data)
     return NextResponse.json(share, { status: 200 })
   } catch (err: any) {
     let status = 400

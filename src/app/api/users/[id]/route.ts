@@ -60,7 +60,7 @@ import { db } from "@/lib/db"
  *       404:
  *         description: User not found.
  */
-export async function PUT(req: NextRequest, { params }: { params: { id: string } }) {
+export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const adminRole = req.headers.get("x-user-role")
     const adminId = req.headers.get("x-user-id")
@@ -72,13 +72,13 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
     const body = await req.json()
     const { role, status, tier } = body
 
-    const existingUser = await db.user.findUnique({ where: { id: params.id } })
+    const existingUser = await db.user.findUnique({ where: { id: (await params).id } })
     if (!existingUser) {
       return NextResponse.json({ error: "User not found." }, { status: 404 })
     }
 
     // Prevent admin from suspending or demoting themselves
-    if (params.id === adminId && (status === "SUSPENDED" || role === "STUDENT")) {
+    if ((await params).id === adminId && (status === "SUSPENDED" || role === "STUDENT")) {
       return NextResponse.json({ error: "You cannot suspend or demote your own admin account." }, { status: 400 })
     }
 
@@ -88,7 +88,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
     if (tier && (tier === "FREE" || tier === "PREMIUM")) updateData.tier = tier
 
     const updatedUser = await db.user.update({
-      where: { id: params.id },
+      where: { id: (await params).id },
       data: updateData,
       select: {
         id: true,
@@ -107,8 +107,8 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
         userId: adminId,
         action: `UPDATE_USER_${Object.keys(updateData).join("_").toUpperCase()}`,
         targetEntity: "users",
-        targetId: params.id,
-        ipAddress: req.headers.get("x-forwarded-for") ?? req.ip
+        targetId: (await params).id,
+        ipAddress: req.headers.get("x-forwarded-for") ?? "unknown"
       }
     })
 
