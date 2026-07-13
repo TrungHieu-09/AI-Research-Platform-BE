@@ -130,5 +130,5 @@ export default async function proxy(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/api/((?!auth|public).*)"],
+  matcher: ["/api/:path*"],
 }
