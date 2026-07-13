@@ -11,7 +11,7 @@ export const UpdateRatingSchema = z.object({
 })
 
 export const ShareDocumentSchema = z.object({
-  sharedWith: z.string().uuid("Invalid recipient user ID format"),
+  sharedWith: z.string().min(1, "Recipient user ID or email is required"),
   permission: z.enum(["view", "comment", "edit"]).default("view"),
 })
 

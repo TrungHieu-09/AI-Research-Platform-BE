@@ -128,15 +128,18 @@ export async function shareDocument(documentId: string, ownerId: string, input: 
     throw new Error("Forbidden: Only the document owner can share this document.")
   }
 
-  const targetUser = await db.user.findUnique({ where: { id: input.sharedWith } })
+  const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(input.sharedWith);
+  const targetUser = await db.user.findFirst({
+    where: isUuid ? { id: input.sharedWith } : { email: input.sharedWith },
+  })
   if (!targetUser) throw new Error("Target user not found.")
 
   return db.documentShare.upsert({
-    where: { documentId_sharedWith: { documentId, sharedWith: input.sharedWith } },
+    where: { documentId_sharedWith: { documentId, sharedWith: targetUser.id } },
     create: {
       documentId,
       sharedById: ownerId,
-      sharedWith: input.sharedWith,
+      sharedWith: targetUser.id,
       permission: input.permission,
     },
     update: {
