@@ -436,3 +436,25 @@ export async function getSessionMessages(sessionId: string, userId: string) {
     }
   })
 }
+
+export async function renameChatSession(sessionId: string, userId: string, newTitle: string) {
+  const session = await db.chatSession.findUnique({ where: { id: sessionId } })
+  if (!session) throw new Error("Session not found.")
+  if (session.userId !== userId) throw new Error("Forbidden: Access denied to this chat session.")
+
+  return db.chatSession.update({
+    where: { id: sessionId },
+    data: { title: newTitle },
+  })
+}
+
+export async function deleteChatSession(sessionId: string, userId: string) {
+  const session = await db.chatSession.findUnique({ where: { id: sessionId } })
+  if (!session) throw new Error("Session not found.")
+  if (session.userId !== userId) throw new Error("Forbidden: Access denied to this chat session.")
+
+  return db.chatSession.delete({
+    where: { id: sessionId },
+  })
+}
+
