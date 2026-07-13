@@ -39,7 +39,18 @@ import { getUserChatSessions } from "@/lib/services/ai-service"
  */
 export async function GET(req: NextRequest) {
   try {
-    const userId = req.headers.get("x-user-id")
+    let userId = req.headers.get("x-user-id")
+    if (!userId) {
+      const token = req.headers.get("Authorization")?.split(" ")[1]
+      if (token) {
+        try {
+          const { jwtVerify } = await import("jose")
+          const secret = new TextEncoder().encode(process.env.JWT_SECRET)
+          const { payload } = await jwtVerify(token, secret)
+          if (payload.sub) userId = payload.sub as string
+        } catch {}
+      }
+    }
     if (!userId) {
       return NextResponse.json({ error: "Authentication required." }, { status: 401 })
     }

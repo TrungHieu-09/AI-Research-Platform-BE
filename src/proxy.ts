@@ -20,12 +20,10 @@ const ROUTE_RULES: { path: string; minRole: Role }[] = [
   { path: "/api/documents/upload-url", minRole: "STUDENT" },
   { path: "/api/documents", minRole: "STUDENT" },
   { path: "/api/subjects/suggest", minRole: "STUDENT" },
-  { path: "/api/collections", minRole: "STUDENT" },
   { path: "/api/ai/chat", minRole: "STUDENT" },
   { path: "/api/ai/limit", minRole: "STUDENT" },
   { path: "/api/payments/checkout", minRole: "STUDENT" },
   { path: "/api/payments/receipts", minRole: "STUDENT" },
-  { path: "/api/documents", minRole: "STUDENT" }, // general doc access
   // Admin+ routes
   { path: "/api/documents/moderate", minRole: "ADMIN" },
   // Admin-only routes
@@ -33,11 +31,29 @@ const ROUTE_RULES: { path: string; minRole: Role }[] = [
   { path: "/api/users", minRole: "ADMIN" },
 ]
 
+function getCorsHeaders(request: NextRequest) {
+  const origin = request.headers.get("origin") || process.env.FRONTEND_URL || "http://localhost:3000"
+  return {
+    "Access-Control-Allow-Origin": origin,
+    "Access-Control-Allow-Methods": "GET,POST,PUT,PATCH,DELETE,OPTIONS",
+    "Access-Control-Allow-Headers": "Content-Type, Authorization, x-user-id, x-user-role, x-user-tier",
+    "Access-Control-Allow-Credentials": "true",
+  }
+}
+
 // ──────────────────────────────────────────────────────────────────────────────
-// Middleware
+// Proxy Handler (Next.js 16 Proxy / Middleware)
 // ──────────────────────────────────────────────────────────────────────────────
 
 export async function proxy(request: NextRequest) {
+  // 1. Immediately answer CORS preflight OPTIONS requests with 200 OK
+  if (request.method === "OPTIONS") {
+    return new NextResponse(null, {
+      status: 200,
+      headers: getCorsHeaders(request),
+    })
+  }
+
   const pathname = request.nextUrl.pathname
 
   // Find the most specific (longest path) matching rule
@@ -51,7 +67,10 @@ export async function proxy(request: NextRequest) {
   const token = request.headers.get("Authorization")?.split(" ")[1]
 
   if (!token) {
-    return NextResponse.json({ error: "Authentication token required." }, { status: 401 })
+    return NextResponse.json(
+      { error: "Authentication token required." },
+      { status: 401, headers: getCorsHeaders(request) },
+    )
   }
 
   try {
@@ -63,7 +82,7 @@ export async function proxy(request: NextRequest) {
     if ((ROLE_HIERARCHY[userRole] ?? 0) < ROLE_HIERARCHY[matchedRule.minRole]) {
       return NextResponse.json(
         { error: `Access denied. Required role: ${matchedRule.minRole}.` },
-        { status: 403 },
+        { status: 403, headers: getCorsHeaders(request) },
       )
     }
 
@@ -75,11 +94,13 @@ export async function proxy(request: NextRequest) {
 
     return NextResponse.next({ request: { headers: requestHeaders } })
   } catch {
-    return NextResponse.json({ error: "Invalid or expired session token." }, { status: 401 })
+    return NextResponse.json(
+      { error: "Invalid or expired session token." },
+      { status: 401, headers: getCorsHeaders(request) },
+    )
   }
 }
 
 export const config = {
-  // Apply middleware to all API routes EXCEPT auth and public routes
   matcher: ["/api/((?!auth|public).*)"],
 }

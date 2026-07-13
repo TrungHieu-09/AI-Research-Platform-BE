@@ -14,6 +14,7 @@ import crypto from "crypto"
  *       without forcing the file to be registered as a formal academic Document in the library.
  *       Calculates SHA-256 hash and saves the file cleanly into `/public/uploads/{purpose}`.
  *     tags:
+ *       - AI Assistant
  *       - General / Universal Upload
  *     security:
  *       - BearerAuth: []
@@ -110,4 +111,17 @@ export async function POST(req: NextRequest) {
       { status: 500 }
     )
   }
+}
+
+export async function OPTIONS(req: NextRequest) {
+  const origin = req.headers.get("origin") || process.env.FRONTEND_URL || "http://localhost:3000"
+  return new NextResponse(null, {
+    status: 200,
+    headers: {
+      "Access-Control-Allow-Origin": origin,
+      "Access-Control-Allow-Methods": "GET,POST,PUT,PATCH,DELETE,OPTIONS",
+      "Access-Control-Allow-Headers": "Content-Type, Authorization, x-user-id, x-user-role, x-user-tier",
+      "Access-Control-Allow-Credentials": "true",
+    },
+  })
 }
