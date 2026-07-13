@@ -141,10 +141,21 @@ export async function getDocumentById(id: string, requestingUserId: string, requ
     }
   }
 
-  // Record a view in background without blocking
+  // Record a view in background without blocking, throttled to once per 15 minutes per user to prevent duplicate views (+2 from React StrictMode or quick reloads)
   if (requestingUserId) {
-    db.documentView.create({
-      data: { documentId: doc.id, userId: requestingUserId },
+    const fifteenMinutesAgo = new Date(Date.now() - 15 * 60 * 1000)
+    db.documentView.findFirst({
+      where: {
+        documentId: doc.id,
+        userId: requestingUserId,
+        viewedAt: { gte: fifteenMinutesAgo },
+      },
+    }).then((recentView) => {
+      if (!recentView) {
+        return db.documentView.create({
+          data: { documentId: doc.id, userId: requestingUserId },
+        })
+      }
     }).catch((e) => console.error("[Record View Error]:", e.message))
   }
 
