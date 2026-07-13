@@ -33,7 +33,7 @@ export async function getUserDocuments(userId: string, page = 1, pageSize = 20) 
 }
 
 export async function getDocumentById(id: string, requestingUserId: string, requestingRole: string) {
-  const doc = await db.document.findUnique({
+  const doc = await db.document.findFirst({
     where: { id, deletedAt: null },
     include: {
       owner: { select: { id: true, name: true, email: true } },
@@ -90,12 +90,12 @@ export async function createDocument(ownerId: string, input: UploadMetadataInput
 // ──────────────────────────────────────────────────────────────────────────────
 
 export async function softDeleteDocument(id: string, requestingUserId: string, requestingRole: string) {
-  const doc = await db.document.findUnique({ where: { id, deletedAt: null } })
+  const doc = await db.document.findFirst({ where: { id, deletedAt: null } })
   if (!doc) throw new Error("Document not found.")
 
   // Only the owner or admin can delete
   if (doc.ownerId !== requestingUserId && requestingRole !== "ADMIN") {
-    throw new Error("Permission denied.")
+    throw new Error(`Permission denied.`)
   }
 
   return db.document.update({
@@ -114,7 +114,7 @@ export async function moderateDocument(
   input: ModerationDecisionInput,
   ipAddress?: string,
 ) {
-  const doc = await db.document.findUnique({ where: { id, deletedAt: null } })
+  const doc = await db.document.findFirst({ where: { id, deletedAt: null } })
   if (!doc) throw new Error("Document not found.")
   if (doc.status !== "PENDING") throw new Error("Only PENDING documents can be moderated.")
 

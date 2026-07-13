@@ -94,7 +94,7 @@ export async function getUserBookmarks(userId: string) {
 }
 
 export async function addBookmark(documentId: string, userId: string) {
-  const doc = await db.document.findUnique({ where: { id: documentId, deletedAt: null } })
+  const doc = await db.document.findFirst({ where: { id: documentId, deletedAt: null } })
   if (!doc) throw new Error("Document not found.")
 
   return db.bookmark.upsert({
