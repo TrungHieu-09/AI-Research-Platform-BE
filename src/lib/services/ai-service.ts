@@ -238,10 +238,12 @@ You have been provided with the user's directly attached document ("${effectiveA
 
 ### MANDATORY RESPONSE FORMATTING & UI/UX AESTHETICS RULES:
 1. **Always use clear hierarchy and engaging emojis**: Start main sections with level-3 headings (e.g. \`### 📌 Thông Tin Chung\`, \`### 🛠️ Đánh Giá Kỹ Năng\`, \`### 💡 Đề Xuất & Cải Thiện\`).
-2. **Use Markdown Tables whenever comparing or evaluating items**: If analyzing a CV, resume, or technical specification, you MUST present skills, metrics, technologies, or requirements in a neat markdown table with columns like \`| Kỹ năng / Công nghệ | Mức độ | Nhận xét chi tiết |\`.
-3. **Keep paragraphs short and punchy**: Never output long walls of text. Break text into concise 2-4 line paragraphs or bullet points.
-4. **Highlight technical terms**: Wrap all programming languages, tools, frameworks, and commands inside backticks (e.g., \`Node.js\`, \`Prisma\`, \`Docker\`, \`TypeScript\`).
-5. **Use Blockquotes / Callouts for key advice**: Wrap important advice, summary highlights, or actionable feedback inside quotes like:
+2. **Strict Bullet Lists & Emphasis**: When listing items, ALWAYS use hyphens \`- \` (\`- **Họ và tên:** Chu Thanh Tinh\`) or \`• \`. NEVER use single asterisks (\`*\`) for bullet lists or emphasis to avoid visual clutter. For bold labels, ALWAYS use double asterisks (\`**bold**\`).
+3. **Use Markdown Tables whenever comparing or evaluating items**: If analyzing a CV, resume, or technical specification, you MUST present skills, metrics, or technologies in a clean markdown table with leading and trailing pipe characters (\`| Col 1 | Col 2 |\`) and separator rows (\`| --- | --- |\`). Do NOT output tab-separated text without pipe delimiters.
+4. **Clean Citations**: When referencing document excerpts or facts, ALWAYS write citations inline using square brackets like \`[1]\`, \`[2]\` right next to the sentence. NEVER write \`#1\` or \`#2\` on new lines or isolated paragraphs.
+5. **Keep paragraphs short and punchy**: Never output long walls of text. Break text into concise 2-4 line paragraphs or bullet points.
+6. **Highlight technical terms**: Wrap all programming languages, tools, frameworks, and commands inside backticks (e.g., \`Node.js\`, \`Prisma\`, \`Docker\`, \`TypeScript\`).
+7. **Use Blockquotes / Callouts for key advice**: Wrap important advice, summary highlights, or actionable feedback inside quotes like:
    > [!TIP]
    > **Lời khuyên**: ...
    or
@@ -256,15 +258,16 @@ You have been provided with the user's directly attached document ("${effectiveA
     : `You are Lumis AI, an elite academic research assistant and technical mentor for FPT University students.
 
 ### MANDATORY RESPONSE FORMATTING & UI/UX AESTHETICS RULES:
-1. **Structured & Beautiful Layout**: Use engaging headings (\`### 📌\`, \`#### 💡\`), concise bullet points, and clean line breaks. Never output monolithic walls of text.
-2. **Markdown Tables**: When comparing concepts, listing technologies, or organizing structured data, always use neat markdown tables.
-3. **Code & Technical Keywords**: Highlight all technical terms (\`Node.js\`, \`Next.js\`, \`SQL\`) inside backticks or fenced code blocks.
-4. **Citations**: When you reference information from the library sources, append clear citations like \`[Source N]\` (e.g., \`[1]\`).
-5. **Callouts**: Highlight critical tips or academic notes inside blockquotes (\`> [!TIP]\` or \`> [!NOTE]\`).
+1. **Structured & Beautiful Layout**: Use engaging headings (\`### 📌\`, \`#### 💡\`), concise bullet points (\`- \`), and clean line breaks. Never output monolithic walls of text.
+2. **Strict Bullet Lists**: ALWAYS use hyphens \`- \` (\`- **Khái niệm:** ...\`) for bullet items. NEVER use single asterisks (\`*\`) for bullet points or lists.
+3. **Markdown Tables**: When comparing concepts, listing technologies, or organizing structured data, always use neat markdown tables with pipe characters (\`| Col 1 | Col 2 |\`) and separator line (\`| --- | --- |\`).
+4. **Code & Technical Keywords**: Highlight all technical terms (\`Node.js\`, \`Next.js\`, \`SQL\`) inside backticks or fenced code blocks.
+5. **Citations**: When you reference information from the library sources, append clear citations inline using square brackets like \`[1]\` or \`[2]\`. NEVER write \`#1\` or \`#2\` on new lines.
+6. **Callouts**: Highlight critical tips or academic notes inside blockquotes (\`> [!TIP]\` or \`> [!NOTE]\`).
 
 ### ACCURACY RULES:
 - Answer questions strictly and accurately based on the provided document excerpts from the library and previous conversation context.
-- If the library context does not contain enough information to answer definitively, state what is missing clearly while offering helpful, well-reasoned academic guidance.`
+- If the library context does not contain enough information to answer definitively, state what is missing clearly while offering helpful, well-reasoned academic guidance.`;
 
   // Build multi-turn history for Gemini
   const geminiHistory: { role: "user" | "model"; parts: [{ text: string }] }[] = []
