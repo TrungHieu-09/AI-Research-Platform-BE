@@ -129,3 +129,42 @@ export async function getUserReceipts(userId: string) {
     },
   })
 }
+
+export async function confirmPaymentOrder(userId: string, orderId: string) {
+  const receipt = await db.paymentReceipt.findFirst({
+    where: { id: orderId, userId },
+  })
+
+  if (!receipt) {
+    throw new Error("Không tìm thấy đơn hàng thanh toán này của bạn.")
+  }
+
+  if (receipt.status === "COMPLETED") {
+    return { success: true, message: "Đơn hàng đã được thanh toán từ trước." }
+  }
+
+  if (receipt.status === "FAILED") {
+    throw new Error("Đơn hàng này đã bị hủy hoặc thất bại.")
+  }
+
+  await db.paymentReceipt.update({
+    where: { id: receipt.id },
+    data: { status: "COMPLETED", verifiedAt: new Date() },
+  })
+
+  await db.user.update({
+    where: { id: userId },
+    data: { tier: "PREMIUM" },
+  })
+
+  await db.auditLog.create({
+    data: {
+      userId,
+      action: "PAYMENT_CONFIRMED_SANDBOX",
+      targetEntity: "payment_receipts",
+      targetId: receipt.id,
+    },
+  })
+
+  return { success: true, message: "Xác nhận thanh toán thành công! Tài khoản của bạn đã được nâng cấp lên PREMIUM." }
+}
