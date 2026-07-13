@@ -32,6 +32,76 @@ export async function getUserDocuments(userId: string, page = 1, pageSize = 20) 
   return { items, total, page, pageSize, totalPages: Math.ceil(total / pageSize) }
 }
 
+export async function getPublicDocuments(
+  page = 1,
+  pageSize = 20,
+  options?: {
+    subjectId?: string
+    search?: string
+    sort?: "newest" | "popular" | "top_rated"
+  }
+) {
+  const skip = (page - 1) * pageSize
+  const where: any = {
+    status: "APPROVED",
+    visibility: "PUBLIC",
+    deletedAt: null,
+  }
+
+  if (options?.subjectId) {
+    where.subjectId = options.subjectId
+  }
+
+  if (options?.search) {
+    where.OR = [
+      { title: { contains: options.search, mode: "insensitive" } },
+      { description: { contains: options.search, mode: "insensitive" } },
+    ]
+  }
+
+  let orderBy: any = { createdAt: "desc" }
+  if (options?.sort === "popular") {
+    orderBy = { views: { _count: "desc" } }
+  } else if (options?.sort === "top_rated") {
+    orderBy = [{ ratings: { _count: "desc" } }, { createdAt: "desc" }]
+  }
+
+  const [items, total] = await Promise.all([
+    db.document.findMany({
+      where,
+      orderBy,
+      skip,
+      take: pageSize,
+      select: {
+        id: true,
+        title: true,
+        description: true,
+        thumbnailUrl: true,
+        fileUrl: true,
+        fileSize: true,
+        mimeType: true,
+        pageCount: true,
+        status: true,
+        visibility: true,
+        createdAt: true,
+        updatedAt: true,
+        subject: { select: { id: true, name: true, code: true } },
+        owner: { select: { id: true, name: true, avatarUrl: true } },
+        _count: {
+          select: {
+            views: true,
+            ratings: true,
+            bookmarks: true,
+          },
+        },
+      },
+    }),
+    db.document.count({ where }),
+  ])
+
+  return { items, total, page, pageSize, totalPages: Math.ceil(total / pageSize) }
+}
+
 export async function getDocumentById(id: string, requestingUserId: string, requestingRole: string) {
   const doc = await db.document.findUnique({
     where: { id, deletedAt: null },

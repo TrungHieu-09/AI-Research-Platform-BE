@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { UploadMetadataSchema } from "@/lib/validation/doc"
-import { getUserDocuments, createDocument } from "@/lib/services/doc-service"
+import { getUserDocuments, getPublicDocuments, createDocument } from "@/lib/services/doc-service"
 import { getAdminDocuments } from "@/lib/services/admin-service"
 
 /**
@@ -138,6 +138,16 @@ export async function GET(req: NextRequest) {
     const { searchParams } = new URL(req.url)
     const page = Math.max(1, Number(searchParams.get("page") ?? 1))
     const pageSize = Math.min(50, Math.max(1, Number(searchParams.get("pageSize") ?? 20)))
+
+    // If caller is requesting public community documents (Forum feed)
+    if (searchParams.get("feed") === "public" || searchParams.get("visibility") === "PUBLIC") {
+      const subjectId = searchParams.get("subjectId") ?? undefined
+      const search = searchParams.get("search") ?? undefined
+      const sort = (searchParams.get("sort") as "newest" | "popular" | "top_rated") ?? "newest"
+
+      const publicResult = await getPublicDocuments(page, pageSize, { subjectId, search, sort })
+      return NextResponse.json(publicResult)
+    }
 
     // If caller is ADMIN and requests system-wide filtering or status filtering
     if (role === "ADMIN" && (searchParams.get("all") === "true" || searchParams.has("status") || searchParams.has("ownerId"))) {
