@@ -24,6 +24,18 @@ export async function getUserDocuments(userId: string, page = 1, pageSize = 20) 
         fileSize: true,
         fileUrl: true,
         subject: { select: { id: true, name: true, code: true } },
+        collections: {
+          select: {
+            collection: { select: { id: true, name: true } },
+          },
+        },
+        bookmarks: {
+          where: { userId },
+          select: { id: true },
+        },
+        tags: {
+          select: { id: true, name: true },
+        },
         createdAt: true,
         updatedAt: true,
       },
