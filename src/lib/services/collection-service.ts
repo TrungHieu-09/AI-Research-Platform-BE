@@ -56,7 +56,7 @@ export async function addDocumentToCollection(collectionId: string, userId: stri
   const collection = await db.collection.findFirst({ where: { id: collectionId, userId } })
   if (!collection) throw new Error("Collection not found.")
 
-  const document = await db.document.findUnique({ where: { id: input.documentId, deletedAt: null } })
+  const document = await db.document.findFirst({ where: { id: input.documentId, deletedAt: null } })
   if (!document) throw new Error("Document not found.")
 
   return db.collectionDocument.create({
