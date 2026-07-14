@@ -57,15 +57,16 @@ import { moderateDocument } from "@/lib/services/doc-service"
  *       422:
  *         description: Validation error.
  */
-export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
+export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> | { id: string } }) {
   try {
     const role = req.headers.get("x-user-role")
     if (role !== "ADMIN") {
       return NextResponse.json({ error: "Access denied. Admin role required." }, { status: 403 })
     }
 
+    const { id } = await params
     const adminId = req.headers.get("x-user-id")!
-    const ipAddress = req.headers.get("x-forwarded-for") ?? req.ip
+    const ipAddress = req.headers.get("x-forwarded-for") ?? req.headers.get("x-real-ip")
     const body = await req.json()
     const parsed = ModerationDecisionSchema.safeParse(body)
 
@@ -73,7 +74,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       return NextResponse.json({ error: parsed.error.flatten().fieldErrors }, { status: 422 })
     }
 
-    const doc = await moderateDocument(params.id, adminId, parsed.data, ipAddress ?? undefined)
+    const doc = await moderateDocument(id, adminId, parsed.data, ipAddress ?? undefined)
     return NextResponse.json(doc)
   } catch (err: any) {
     const status = err.message === "Document not found." ? 404 : 400
