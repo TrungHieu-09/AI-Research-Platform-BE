@@ -68,65 +68,46 @@ export default async function proxy(request: NextRequest) {
     (a, b) => b.path.length - a.path.length,
   )[0]
 
-  // No rule matched — allow request through (public routes like /api/auth/*)
-  if (!matchedRule) {
-    const response = NextResponse.next()
-    response.headers.set("Access-Control-Allow-Origin", origin)
-    return response
-  }
-
   const token = request.headers.get("Authorization")?.split(" ")[1]
+  const requestHeaders = new Headers(request.headers)
+  
+  let userRole: Role = "STUDENT"
+  let isAuthValid = false
 
-  if (!token) {
-    return NextResponse.json(
-      { error: "Authentication token required." },
-      {
-        status: 401,
-        headers: {
-          "Access-Control-Allow-Origin": origin,
-        },
-      }
-    )
+  if (token) {
+    try {
+      const secret = new TextEncoder().encode(process.env.JWT_SECRET)
+      const { payload } = await jwtVerify(token, secret)
+      
+      userRole = (payload.role as Role) ?? "STUDENT"
+      requestHeaders.set("x-user-id", payload.sub as string)
+      requestHeaders.set("x-user-role", userRole)
+      requestHeaders.set("x-user-tier", (payload.tier as string) ?? "FREE")
+      isAuthValid = true
+    } catch {
+      isAuthValid = false
+    }
   }
 
-  try {
-    const secret = new TextEncoder().encode(process.env.JWT_SECRET)
-    const { payload } = await jwtVerify(token, secret)
-
-    const userRole = (payload.role as Role) ?? "STUDENT"
+  if (matchedRule) {
+    if (!token || !isAuthValid) {
+      return NextResponse.json(
+        { error: "Authentication token required or invalid." },
+        { status: 401, headers: { "Access-Control-Allow-Origin": origin } }
+      )
+    }
 
     if ((ROLE_HIERARCHY[userRole] ?? 0) < ROLE_HIERARCHY[matchedRule.minRole]) {
       return NextResponse.json(
         { error: `Access denied. Required role: ${matchedRule.minRole}.` },
-        {
-          status: 403,
-          headers: {
-            "Access-Control-Allow-Origin": origin,
-          },
-        },
+        { status: 403, headers: { "Access-Control-Allow-Origin": origin } }
       )
     }
-
-    // Forward resolved identity to route handlers via request headers
-    const requestHeaders = new Headers(request.headers)
-    requestHeaders.set("x-user-id", payload.sub as string)
-    requestHeaders.set("x-user-role", userRole)
-    requestHeaders.set("x-user-tier", (payload.tier as string) ?? "FREE")
-
-    const response = NextResponse.next({ request: { headers: requestHeaders } })
-    response.headers.set("Access-Control-Allow-Origin", origin)
-    return response
-  } catch {
-    return NextResponse.json(
-      { error: "Invalid or expired session token." },
-      {
-        status: 401,
-        headers: {
-          "Access-Control-Allow-Origin": origin,
-        },
-      }
-    )
   }
+
+  const response = NextResponse.next({ request: { headers: requestHeaders } })
+  response.headers.set("Access-Control-Allow-Origin", origin)
+  return response
 }
 
 export const config = {
