@@ -210,15 +210,64 @@ export async function processChatQuery(
     }
   }
 
-  // 2. Vector similarity search (RAG context retrieval)
-  // ONLY search library chunks if there is NO directly attached file (`!effectiveAttachedFile`)!
+  // 2. When SINGLE_DOCUMENT mode with a library docId, fetch all chunks for full-content analysis
+  // This gives the same quality as directly attaching a file.
+  let libraryDocFullText = ""
+  let libraryDocTitle = ""
+  if (normalizedScope === "SINGLE_DOCUMENT" && normalizedDocId && !effectiveAttachedFile) {
+    try {
+      const doc = await db.document.findUnique({
+        where: { id: normalizedDocId },
+        select: { title: true, mimeType: true, fileUrl: true }
+      })
+      if (doc) {
+        libraryDocTitle = doc.title
+        // Fetch all chunks ordered by index to reconstruct full document text
+        const allChunks = await db.documentChunk.findMany({
+          where: { documentId: normalizedDocId },
+          orderBy: { chunkIndex: "asc" },
+          select: { content: true, pageNumber: true, chunkIndex: true }
+        })
+        if (allChunks.length > 0) {
+          libraryDocFullText = allChunks.map(c => c.content).join("\n\n")
+          console.log(`[Library Doc] Loaded ${allChunks.length} chunks (${libraryDocFullText.length} chars) for "${doc.title}"`)
+        } else {
+          // Fallback: try reading the file directly if no chunks yet
+          try {
+            let relativePath = decodeURIComponent(doc.fileUrl.replace(/^https?:\/\/[^/]+/, ""))
+            if (relativePath.startsWith("/")) relativePath = relativePath.slice(1)
+            const localFilePath = path.join(process.cwd(), "public", relativePath)
+            if (fs.existsSync(localFilePath)) {
+              const fileBuffer = fs.readFileSync(localFilePath)
+              libraryDocFullText = await parseBufferToText(fileBuffer, doc.title)
+              libraryDocFullText = libraryDocFullText.replace(/\x00/g, "").trim()
+            } else {
+              const fileRes = await fetch(doc.fileUrl)
+              if (fileRes.ok) {
+                const arrayBuffer = await fileRes.arrayBuffer()
+                libraryDocFullText = await parseBufferToText(Buffer.from(arrayBuffer), doc.title)
+                libraryDocFullText = libraryDocFullText.replace(/\x00/g, "").trim()
+              }
+            }
+          } catch (e: any) {
+            console.warn(`[Library Doc] Fallback file read failed: ${e?.message}`)
+          }
+        }
+      }
+    } catch (e: any) {
+      console.warn(`[Library Doc] Failed to load full document content: ${e?.message}`)
+    }
+  }
+
+  // 3. Vector similarity search (RAG context retrieval)
+  // Only do vector search if NOT using full-content library mode and NOT using an attached file.
   let matchedChunks: any[] = []
-  if (!effectiveAttachedFile) {
+  if (!effectiveAttachedFile && !libraryDocFullText) {
     const queryEmbedding = await getEmbeddings(message)
     matchedChunks = await searchSimilarChunks(queryEmbedding, 5, normalizedDocId, normalizedSubjectId)
   }
 
-  // 3. Build contextual prompt with citations and attached file content
+  // 4. Build contextual prompt with citations and attached file content
   const libraryContexts = matchedChunks
     .map(
       (chunk, idx) =>
@@ -226,15 +275,19 @@ export async function processChatQuery(
     )
     .join("\n\n")
 
-  const attachedContext = effectiveAttachedFile
-    ? (attachedFileText
-      ? `=== DIRECTLY ATTACHED FILE CONTENT ("${effectiveAttachedFile.name}") ===\n${attachedFileText.slice(0, 18000)}\n=================================================================\n\n`
-      : `=== DIRECTLY ATTACHED FILE ("${effectiveAttachedFile.name}") ===\n(Notice: No selectable text layer could be automatically extracted from this file. It might be a scanned PDF or image without OCR text.)\n=================================================================\n\n`)
+  // Determine the active document name for prompt building
+  const activeDocName = effectiveAttachedFile?.name || libraryDocTitle || ""
+  const activeDocText = attachedFileText || libraryDocFullText
+
+  const attachedContext = activeDocName
+    ? (activeDocText
+      ? `=== DOCUMENT CONTENT ("${activeDocName}") ===\n${activeDocText.slice(0, 22000)}\n=================================================================\n\n`
+      : `=== DOCUMENT ("${activeDocName}") ===\n(Notice: No selectable text layer could be automatically extracted from this document. It might be a scanned PDF or image without OCR text.)\n=================================================================\n\n`)
     : ""
 
-  const systemPrompt = effectiveAttachedFile
+  const systemPrompt = (effectiveAttachedFile || libraryDocFullText)
     ? `You are Lumis AI, an elite academic research, technical evaluation, and document analysis assistant tailored for FPT University students and developers.
-You have been provided with the user's directly attached document ("${effectiveAttachedFile.name}").
+You have been provided with the document ("${activeDocName}") for analysis.
 
 ### MANDATORY RESPONSE FORMATTING & UI/UX AESTHETICS RULES:
 1. **Clean & Professional Hierarchy**: Start main sections with clear level-3 headings (e.g. \`### 📌 Thông Tin Chung\`, \`### 🛠️ Đánh Giá Kỹ Năng\`, \`### 💡 Đề Xuất & Cải Thiện\`). Each heading MUST be on its own separate line followed by a blank line.
@@ -257,7 +310,7 @@ You have been provided with the user's directly attached document ("${effectiveA
 - **Strict Accuracy**: Base your analysis and answers strictly on the extracted text inside \`DIRECTLY ATTACHED FILE CONTENT\` and our conversation history. Never hallucinate or invent qualifications.
 - **If analyzing a CV / Resume**: Provide a comprehensive breakdown including personal profile, education, technical proficiency table, project experience, and actionable suggestions to make their CV stand out to top IT recruiters.
 - **If analyzing an SRS / Project Document**: Summarize system objectives, functional/non-functional requirements table, and architectural highlights.
-- **If no selectable text layer could be extracted**: Politely inform the user that the file '${effectiveAttachedFile.name}' appears to be a scanned image or file without selectable text layer, requesting them to provide an OCR-processed PDF or Word document.`
+- **If no selectable text layer could be extracted**: Politely inform the user that the document '${activeDocName}' appears to be a scanned image or file without selectable text layer, requesting them to provide an OCR-processed PDF or Word document.`
     : `You are Lumis AI, an elite academic research assistant and technical mentor for FPT University students.
 
 ### MANDATORY RESPONSE FORMATTING & UI/UX AESTHETICS RULES:
@@ -293,10 +346,10 @@ You have been provided with the user's directly attached document ("${effectiveA
       ? `${attachedContext}${libraryContexts ? `Library Context Sources:\n${libraryContexts}\n\n` : ""}Student Question:\n${message}`
       : `Student Question:\n${message}\n\n(No relevant document excerpts or attached files found. Provide a general academic answer.)`
   } else {
-    // If follow-up turn and file is attached/remembered, ensure file context is prepended to Turn 1 history
-    if (effectiveAttachedFile && attachedFileText && geminiHistory[0]?.role === "user") {
-      if (!geminiHistory[0].parts[0].text.includes("=== DIRECTLY ATTACHED FILE CONTENT")) {
-        geminiHistory[0].parts[0].text = `=== DIRECTLY ATTACHED FILE CONTENT ("${effectiveAttachedFile.name}") ===\n${attachedFileText.slice(0, 18000)}\n=================================================================\n\n${geminiHistory[0].parts[0].text}`
+    // If follow-up turn and document context exists, ensure it is prepended to Turn 1 history
+    if (activeDocText && geminiHistory[0]?.role === "user") {
+      if (!geminiHistory[0].parts[0].text.includes("=== DOCUMENT CONTENT")) {
+        geminiHistory[0].parts[0].text = `=== DOCUMENT CONTENT ("${activeDocName}") ===\n${activeDocText.slice(0, 22000)}\n=================================================================\n\n${geminiHistory[0].parts[0].text}`
       }
     }
     userPrompt = `${libraryContexts ? `Library Context Sources:\n${libraryContexts}\n\n` : ""}Student Follow-up Question:\n${message}`
