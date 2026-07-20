@@ -8,8 +8,8 @@ import { moderateDocument } from "@/lib/services/doc-service"
  *   post:
  *     summary: Moderate Document (Approve/Reject)
  *     description: >
- *       Allows an Admin to approve or reject a pending public document.
- *       Supports alias keys `decision` or `status` from Frontend. If rejected, `rejectionReason` is required.
+ *       Allows an Admin to approve/reject pending public documents, unpublish approved public documents, or republish rejected public documents.
+ *       Supports alias keys `decision` or `status` from Frontend. If rejected/unpublished, `rejectionReason` is required.
  *       Side-effect: automatically records an audit log entry.
  *     tags:
  *       - Documents

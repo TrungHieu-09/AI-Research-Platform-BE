@@ -225,22 +225,36 @@ export async function moderateDocument(
 ) {
   const doc = await db.document.findFirst({ where: { id, deletedAt: null } })
   if (!doc) throw new Error("Document not found.")
-  if (doc.status !== "PENDING") throw new Error("Only PENDING documents can be moderated.")
+  if (doc.visibility !== "PUBLIC") throw new Error("Only PUBLIC documents can be moderated.")
+
+  const isPendingDecision = doc.status === "PENDING"
+  const isUnpublish = doc.status === "APPROVED" && input.decision === "REJECTED"
+  const isRepublish = doc.status === "REJECTED" && input.decision === "APPROVED"
+
+  if (!isPendingDecision && !isUnpublish && !isRepublish) {
+    throw new Error("Invalid document moderation transition.")
+  }
 
   const updated = await db.document.update({
     where: { id },
     data: {
       status: input.decision,
-      rejectionReason: input.rejectionReason ?? null,
+      rejectionReason: input.decision === "REJECTED" ? input.rejectionReason ?? null : null,
       moderatedById: adminId,
       moderatedAt: new Date(),
     },
   })
 
+  const auditAction = isUnpublish
+    ? "DOCUMENT_UNPUBLISHED"
+    : isRepublish
+      ? "DOCUMENT_REPUBLISHED"
+      : `DOCUMENT_${input.decision}`
+
   await db.auditLog.create({
     data: {
       userId: adminId,
-      action: `DOCUMENT_${input.decision}`,
+      action: auditAction,
       targetEntity: "documents",
       targetId: id,
       documentId: id,
@@ -248,15 +262,26 @@ export async function moderateDocument(
     },
   })
 
-  // Tự động tạo thông báo (Notification) cho chủ sở hữu tài liệu kèm lý do từ chối nếu có
+  const notification =
+    input.decision === "APPROVED"
+      ? {
+          title: isRepublish ? "Tài liệu đã được công khai lại" : "Tài liệu đã được phê duyệt",
+          content: isRepublish
+            ? `Tài liệu "${doc.title}" của bạn đã được Admin công khai lại.`
+            : `Tài liệu "${doc.title}" của bạn đã được Admin kiểm duyệt và phê duyệt công khai.`,
+        }
+      : {
+          title: isUnpublish ? "Tài liệu đã bị gỡ công khai" : "Tài liệu bị từ chối",
+          content: isUnpublish
+            ? `Tài liệu "${doc.title}" của bạn đã bị Admin gỡ công khai với lý do: ${input.rejectionReason}`
+            : `Tài liệu "${doc.title}" của bạn đã bị từ chối với lý do: ${input.rejectionReason}`,
+        }
+
   await db.notification.create({
     data: {
       userId: doc.ownerId,
-      title: input.decision === "APPROVED" ? "Tài liệu đã được phê duyệt" : "Tài liệu bị từ chối",
-      content:
-        input.decision === "APPROVED"
-          ? `Tài liệu "${doc.title}" của bạn đã được Admin kiểm duyệt và phê duyệt công khai.`
-          : `Tài liệu "${doc.title}" của bạn đã bị từ chối với lý do: ${input.rejectionReason}`,
+      title: notification.title,
+      content: notification.content,
     },
   })
 
