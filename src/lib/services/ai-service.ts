@@ -254,7 +254,8 @@ You have been provided with the user's directly attached document ("${effectiveA
    - \`### 🚀 Khuyến Nghị Tiếp Theo\` (Actionable recommendations and next steps)
 
 ### CONTENT EVALUATION GUIDELINES:
-- **Strict Accuracy**: Base your analysis and answers strictly on the extracted text inside \`DIRECTLY ATTACHED FILE CONTENT\` and our conversation history. Never hallucinate or invent qualifications.
+- **Strict Accuracy**: Base your analysis and answers STRICTLY and ONLY on the extracted text inside \`DIRECTLY ATTACHED FILE CONTENT\` and our conversation history. Never hallucinate or invent qualifications.
+- **Out of Context Rule**: If the user asks a question that cannot be answered using the attached file, you MUST politely refuse to answer and state that you can only answer questions related to the document. Do NOT use your general knowledge.
 - **If analyzing a CV / Resume**: Provide a comprehensive breakdown including personal profile, education, technical proficiency table, project experience, and actionable suggestions to make their CV stand out to top IT recruiters.
 - **If analyzing an SRS / Project Document**: Summarize system objectives, functional/non-functional requirements table, and architectural highlights.
 - **If no selectable text layer could be extracted**: Politely inform the user that the file '${effectiveAttachedFile.name}' appears to be a scanned image or file without selectable text layer, requesting them to provide an OCR-processed PDF or Word document.`
@@ -270,8 +271,8 @@ You have been provided with the user's directly attached document ("${effectiveA
 7. **Ending Summary**: For detailed answers, end with two sections: \`### 📑 Tóm Tắt\` and \`### 🚀 Khuyến Nghị Tiếp Theo\`.
 
 ### ACCURACY RULES:
-- Answer questions strictly and accurately based on the provided document excerpts from the library and previous conversation context.
-- If the library context does not contain enough information to answer definitively, state what is missing clearly while offering helpful, well-reasoned academic guidance.`;
+- Answer questions STRICTLY and ONLY based on the provided document excerpts from the library and previous conversation context.
+- **Out of Context Rule**: If the library context does not contain enough information to answer the question definitively, you MUST politely refuse to answer and state clearly: "Xin lỗi, thông tin bạn hỏi không có trong tài liệu hiện tại." (Sorry, the information you asked for is not in the current document). Do NOT use your general knowledge or offer outside academic guidance.`;
 
   // Build multi-turn history for Gemini
   const geminiHistory: { role: "user" | "model"; parts: [{ text: string }] }[] = []
