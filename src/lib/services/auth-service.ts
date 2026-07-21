@@ -356,8 +356,40 @@ export async function loginUser(input: LoginInput) {
   const valid = await bcrypt.compare(input.password, user.passwordHash)
   if (!valid) throw new Error("Invalid email or password.")
 
-  const token = await signToken({ sub: user.id, role: user.role, tier: user.tier })
-  return { token, user: { id: user.id, name: user.name, email: user.email, avatarUrl: user.avatarUrl, role: user.role, tier: user.tier, emailVerified: user.emailVerified, emailVerifiedAt: user.emailVerifiedAt, verificationStatus: user.verificationStatus } }
+  let currentTier = user.tier
+
+  if (user.tierExpiresAt && user.tierExpiresAt < new Date()) {
+    await db.user.update({
+      where: { id: user.id },
+      data: {
+        tier: "FREE",
+        tierExpiresAt: null,
+      },
+    })
+
+    currentTier = "FREE"
+  }
+
+  const token = await signToken({
+    sub: user.id,
+    role: user.role,
+    tier: currentTier,
+  })
+
+  return {
+    token,
+    user: {
+      id: user.id,
+      name: user.name,
+      email: user.email,
+      avatarUrl: user.avatarUrl,
+      role: user.role,
+      tier: currentTier,
+      emailVerified: user.emailVerified,
+      emailVerifiedAt: user.emailVerifiedAt,
+      verificationStatus: user.verificationStatus,
+    },
+  }
 }
 
 export async function googleLoginUser(input: GoogleAuthInput) {
@@ -386,6 +418,38 @@ export async function googleLoginUser(input: GoogleAuthInput) {
     })
   }
 
-  const token = await signToken({ sub: user.id, role: user.role, tier: user.tier })
-  return { token, user: { id: user.id, name: user.name, email: user.email, avatarUrl: user.avatarUrl, role: user.role, tier: user.tier, emailVerified: user.emailVerified, emailVerifiedAt: user.emailVerifiedAt, verificationStatus: user.verificationStatus } }
+  let currentTier = user.tier
+
+  if (user.tierExpiresAt && user.tierExpiresAt < new Date()) {
+    await db.user.update({
+      where: { id: user.id },
+      data: {
+        tier: "FREE",
+        tierExpiresAt: null,
+      },
+    })
+
+    currentTier = "FREE"
+  }
+
+  const token = await signToken({
+    sub: user.id,
+    role: user.role,
+    tier: currentTier,
+  })
+
+  return {
+    token,
+    user: {
+      id: user.id,
+      name: user.name,
+      email: user.email,
+      avatarUrl: user.avatarUrl,
+      role: user.role,
+      tier: currentTier,
+      emailVerified: user.emailVerified,
+      emailVerifiedAt: user.emailVerifiedAt,
+      verificationStatus: user.verificationStatus,
+    },
+  }
 }

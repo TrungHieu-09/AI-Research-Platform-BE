@@ -91,15 +91,26 @@ export async function handlePaymentWebhook(transferContent: string, amountReceiv
     throw new Error("Insufficient payment amount received.")
   }
 
+  const user = await db.user.findUnique({ where: { id: receipt.userId } })
+  if (!user) throw new Error("User not found.")
+
+  const additionalDays = receipt.planId === "PREMIUM_YEARLY" ? 365 : 30
+  const now = new Date()
+  const currentExpiresAt = user.tierExpiresAt && user.tierExpiresAt > now ? user.tierExpiresAt : now
+  const newExpiresAt = new Date(currentExpiresAt.getTime() + additionalDays * 24 * 60 * 60 * 1000)
+
   // Activate premium tier for the user
   await db.paymentReceipt.update({
     where: { id: receipt.id },
-    data: { status: "COMPLETED", verifiedAt: new Date() },
+    data: { status: "COMPLETED", verifiedAt: now },
   })
 
   await db.user.update({
     where: { id: receipt.userId },
-    data: { tier: "PREMIUM" },
+    data: { 
+      tier: "PREMIUM",
+      tierExpiresAt: newExpiresAt
+    },
   })
 
   await db.auditLog.create({
@@ -147,14 +158,25 @@ export async function confirmPaymentOrder(userId: string, orderId: string) {
     throw new Error("Đơn hàng này đã bị hủy hoặc thất bại.")
   }
 
+  const user = await db.user.findUnique({ where: { id: userId } })
+  if (!user) throw new Error("User not found.")
+
+  const additionalDays = receipt.planId === "PREMIUM_YEARLY" ? 365 : 30
+  const now = new Date()
+  const currentExpiresAt = user.tierExpiresAt && user.tierExpiresAt > now ? user.tierExpiresAt : now
+  const newExpiresAt = new Date(currentExpiresAt.getTime() + additionalDays * 24 * 60 * 60 * 1000)
+
   await db.paymentReceipt.update({
     where: { id: receipt.id },
-    data: { status: "COMPLETED", verifiedAt: new Date() },
+    data: { status: "COMPLETED", verifiedAt: now },
   })
 
   await db.user.update({
     where: { id: userId },
-    data: { tier: "PREMIUM" },
+    data: { 
+      tier: "PREMIUM",
+      tierExpiresAt: newExpiresAt
+    },
   })
 
   await db.auditLog.create({

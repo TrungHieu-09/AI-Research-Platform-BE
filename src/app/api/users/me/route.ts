@@ -7,43 +7,100 @@ export async function GET(req: NextRequest) {
   try {
     const authUser = await requireBearerUser(req)
 
-    const user = await db.user.findUnique({
+    let user = await db.user.findUnique({
       where: { id: authUser.id },
       select: userProfileSelect,
     })
 
     if (!user) {
-      return NextResponse.json({ error: "User not found" }, { status: 404 })
+      return NextResponse.json(
+        { error: "User not found" },
+        { status: 404 },
+      )
     }
 
-    return NextResponse.json({ user }, { status: 200 })
-  } catch (error: any) {
+    if (user.tierExpiresAt && user.tierExpiresAt < new Date()) {
+      user = await db.user.update({
+        where: { id: authUser.id },
+        data: {
+          tier: "FREE",
+          tierExpiresAt: null,
+        },
+        select: userProfileSelect,
+      })
+    }
+
+    return NextResponse.json(
+      { user },
+      { status: 200 },
+    )
+  } catch (error: unknown) {
     console.error("Get profile error:", error)
-    const status = error.message === "Authentication required." ? 401 : 500
-    return NextResponse.json({ error: error.message ?? "Failed to fetch profile." }, { status })
+
+    const message =
+      error instanceof Error
+        ? error.message
+        : "Failed to fetch profile."
+
+    const status =
+      message === "Authentication required."
+        ? 401
+        : 500
+
+    return NextResponse.json(
+      { error: message },
+      { status },
+    )
   }
 }
 
 export async function PUT(req: NextRequest) {
   try {
     const authUser = await requireBearerUser(req)
-    const body = await req.json()
-    const { name } = body
 
-    if (!name || typeof name !== "string") {
-      return NextResponse.json({ error: "Name is required" }, { status: 400 })
+    const body: unknown = await req.json()
+
+    if (
+      typeof body !== "object" ||
+      body === null ||
+      !("name" in body) ||
+      typeof body.name !== "string" ||
+      body.name.trim() === ""
+    ) {
+      return NextResponse.json(
+        { error: "Name is required" },
+        { status: 400 },
+      )
     }
 
     const updatedUser = await db.user.update({
       where: { id: authUser.id },
-      data: { name },
+      data: {
+        name: body.name.trim(),
+      },
       select: userProfileSelect,
     })
 
-    return NextResponse.json({ user: updatedUser }, { status: 200 })
-  } catch (error: any) {
+    return NextResponse.json(
+      { user: updatedUser },
+      { status: 200 },
+    )
+  } catch (error: unknown) {
     console.error("Update profile error:", error)
-    const status = error.message === "Authentication required." ? 401 : 500
-    return NextResponse.json({ error: error.message ?? "Failed to update profile." }, { status })
+
+    const message =
+      error instanceof Error
+        ? error.message
+        : "Failed to update profile."
+
+    const status =
+      message === "Authentication required."
+        ? 401
+        : 500
+
+    return NextResponse.json(
+      { error: message },
+      { status },
+    )
   }
 }
