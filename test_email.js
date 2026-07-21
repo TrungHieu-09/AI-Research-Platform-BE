@@ -1,1 +1,0 @@
-﻿const nodemailer = require("nodemailer"); async function test() { try { const t = nodemailer.createTransport({ host: "smtp.gmail.com", port: 587, secure: false, auth: { user: "cttinh0129@gmail.com", pass: "ghwwlwmdfzhvwxor" }, tls: { rejectUnauthorized: false } }); await t.verify(); console.log("SUCCESS"); } catch(e) { console.error("ERROR", e); } } test();
