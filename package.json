@@ -28,6 +28,7 @@
     "nodemailer": "^9.0.3",
     "openai": "^4.52.0",
     "pdf-parse": "^2.4.5",
+    "pg": "^8.22.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "swagger-ui-react": "^5.32.8",
