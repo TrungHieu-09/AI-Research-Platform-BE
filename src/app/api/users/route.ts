@@ -56,9 +56,7 @@ export async function GET(req: NextRequest) {
           role: true,
           status: true,
           tier: true,
-          emailVerified: true,
-          emailVerifiedAt: true,
-          verificationStatus: true,
+
           createdAt: true,
           updatedAt: true,
           _count: {

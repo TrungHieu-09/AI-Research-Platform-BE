@@ -121,7 +121,7 @@ export async function getAdminDocuments(
         fileSize: true,
         pageCount: true,
         fileUrl: true,
-        owner: { select: { id: true, name: true, email: true, avatarUrl: true, emailVerified: true, emailVerifiedAt: true, verificationStatus: true } },
+        owner: { select: { id: true, name: true, email: true, avatarUrl: true } },
         subject: { select: { id: true, name: true, code: true } },
         moderatedBy: { select: { id: true, name: true } },
         moderatedAt: true,
