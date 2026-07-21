@@ -1,75 +1,30 @@
 import { NextRequest, NextResponse } from "next/server"
 import { db } from "@/lib/db"
+import { requireBearerAdmin } from "@/lib/request-auth"
+import { AdminCreateUserSchema } from "@/lib/validation/auth"
+import { createUserByAdmin } from "@/lib/services/user-service"
 
 /**
  * @swagger
  * /api/users:
  *   get:
  *     summary: Get all users (Admin only)
- *     description: Retrieve a paginated and filtered list of users along with counts of their documents and chat sessions.
+ *     description: Retrieve a paginated and filtered list of users with document/chat counts and biometric verification status.
  *     tags:
  *       - Users
  *     security:
  *       - BearerAuth: []
- *     parameters:
- *       - in: query
- *         name: page
- *         schema: { type: integer, default: 1 }
- *         description: Page number (min 1).
- *       - in: query
- *         name: limit
- *         schema: { type: integer, default: 20 }
- *         description: Number of records per page (max 50).
- *       - in: query
- *         name: role
- *         schema:
- *           type: string
- *           enum: [STUDENT, ADMIN]
- *         description: Filter by user role.
- *       - in: query
- *         name: status
- *         schema:
- *           type: string
- *           enum: [ACTIVE, UNVERIFIED, SUSPENDED]
- *         description: Filter by account status.
- *     responses:
- *       200:
- *         description: Paginated list of users retrieved successfully.
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 items:
- *                   type: array
- *                   items:
- *                     type: object
- *                     properties:
- *                       id: { type: string, format: uuid }
- *                       name: { type: string, example: "Nguyen Van A" }
- *                       email: { type: string, example: "student@fpt.edu.vn" }
- *                       avatarUrl: { type: string, nullable: true }
- *                       role: { type: string, enum: [STUDENT, ADMIN] }
- *                       status: { type: string, enum: [ACTIVE, UNVERIFIED, SUSPENDED] }
- *                       tier: { type: string, enum: [FREE, PREMIUM] }
- *                       _count:
- *                         type: object
- *                         properties:
- *                           documents: { type: integer, example: 5 }
- *                           chatSessions: { type: integer, example: 12 }
- *                 total: { type: integer, example: 100 }
- *                 page: { type: integer, example: 1 }
- *                 limit: { type: integer, example: 20 }
- *                 totalPages: { type: integer, example: 5 }
- *       403:
- *         description: Access denied (Admin role required).
+ *   post:
+ *     summary: Create User by Admin
+ *     description: Create an ACTIVE user account without registration OTP. User can login immediately and verify email later from Profile.
+ *     tags:
+ *       - Users
+ *     security:
+ *       - BearerAuth: []
  */
 export async function GET(req: NextRequest) {
   try {
-    const role = req.headers.get("x-user-role")
-    if (role !== "ADMIN") {
-      return NextResponse.json({ error: "Access denied. Admin role required." }, { status: 403 })
-    }
+    await requireBearerAdmin(req)
 
     const { searchParams } = new URL(req.url)
     const page = Math.max(1, Number(searchParams.get("page") ?? 1))
@@ -101,23 +56,64 @@ export async function GET(req: NextRequest) {
           role: true,
           status: true,
           tier: true,
+          emailVerified: true,
+          emailVerifiedAt: true,
+          verificationStatus: true,
           createdAt: true,
           updatedAt: true,
           _count: {
             select: {
               documents: true,
-              chatSessions: true
-            }
-          }
+              chatSessions: true,
+            },
+          },
         },
-        orderBy: { createdAt: "desc" }
-      })
+        orderBy: { createdAt: "desc" },
+      }),
     ])
 
     const totalPages = Math.ceil(total / limit)
 
     return NextResponse.json({ items: users, total, page, limit, totalPages }, { status: 200 })
   } catch (error: any) {
-    return NextResponse.json({ error: error.message ?? "Failed to fetch users." }, { status: 500 })
+    const status = error.message === "Authentication required." ? 401 : error.message.includes("Admin role") ? 403 : 500
+    return NextResponse.json({ error: error.message ?? "Failed to fetch users." }, { status })
+  }
+}
+
+export async function POST(req: NextRequest) {
+  try {
+    await requireBearerAdmin(req)
+
+    const body = await req.json()
+    const parsed = AdminCreateUserSchema.safeParse(body)
+
+    if (!parsed.success) {
+      return NextResponse.json({ error: parsed.error.flatten().fieldErrors }, { status: 422 })
+    }
+
+    const user = await createUserByAdmin(parsed.data)
+    return NextResponse.json(user, { status: 201 })
+  } catch (error: any) {
+    if (error.message === "An account with this email already exists.") {
+      return NextResponse.json(
+        {
+          error: "An account with this email already exists.",
+          message: "Email này đã tồn tại trong hệ thống.",
+          fieldErrors: {
+            email: ["Email này đã tồn tại trong hệ thống."],
+          },
+        },
+        { status: 409 },
+      )
+    }
+
+    const status =
+      error.message === "Authentication required."
+        ? 401
+        : error.message.includes("Admin role")
+          ? 403
+          : 500
+    return NextResponse.json({ error: error.message ?? "Failed to create user." }, { status })
   }
 }

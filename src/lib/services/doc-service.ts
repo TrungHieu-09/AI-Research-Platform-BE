@@ -119,7 +119,7 @@ export async function getDocumentById(id: string, requestingUserId: string, requ
   const doc = await db.document.findFirst({
     where: { id, deletedAt: null },
     include: {
-      owner: { select: { id: true, name: true, email: true, avatarUrl: true } },
+      owner: { select: { id: true, name: true, email: true, avatarUrl: true, emailVerified: true, emailVerifiedAt: true, verificationStatus: true } },
       subject: true,
       tags: { select: { id: true, name: true } },
       _count: {

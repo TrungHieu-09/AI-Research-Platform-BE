@@ -32,7 +32,7 @@ function getMailer() {
   })
 }
 
-async function sendOtpEmail(email: string, otpCode: string) {
+export async function sendOtpEmail(email: string, otpCode: string) {
   console.log(`\n======================================================`)
   console.log(`🔑 DEV MODE OTP: Email sent to ${email} -> Code: ${otpCode}`)
   console.log(`======================================================\n`)
@@ -336,14 +336,14 @@ export async function verifyOtp(input: VerifyOtpInput) {
   // Activate the user account
   const user = await db.user.update({
     where: { email: input.email },
-    data: { status: "ACTIVE" },
+    data: { status: "ACTIVE", emailVerified: true, emailVerifiedAt: new Date(), verificationStatus: "VERIFIED" },
   })
 
   // Clean up OTP record
   await db.oneTimePassword.delete({ where: { id: otp.id } })
 
   const token = await signToken({ sub: user.id, role: user.role, tier: user.tier })
-  return { token, user: { id: user.id, name: user.name, email: user.email, role: user.role, tier: user.tier } }
+  return { token, user: { id: user.id, name: user.name, email: user.email, role: user.role, tier: user.tier, emailVerified: user.emailVerified, emailVerifiedAt: user.emailVerifiedAt, verificationStatus: user.verificationStatus } }
 }
 
 export async function loginUser(input: LoginInput) {
@@ -357,7 +357,7 @@ export async function loginUser(input: LoginInput) {
   if (!valid) throw new Error("Invalid email or password.")
 
   const token = await signToken({ sub: user.id, role: user.role, tier: user.tier })
-  return { token, user: { id: user.id, name: user.name, email: user.email, avatarUrl: user.avatarUrl, role: user.role, tier: user.tier } }
+  return { token, user: { id: user.id, name: user.name, email: user.email, avatarUrl: user.avatarUrl, role: user.role, tier: user.tier, emailVerified: user.emailVerified, emailVerifiedAt: user.emailVerifiedAt, verificationStatus: user.verificationStatus } }
 }
 
 export async function googleLoginUser(input: GoogleAuthInput) {
@@ -387,5 +387,5 @@ export async function googleLoginUser(input: GoogleAuthInput) {
   }
 
   const token = await signToken({ sub: user.id, role: user.role, tier: user.tier })
-  return { token, user: { id: user.id, name: user.name, email: user.email, avatarUrl: user.avatarUrl, role: user.role, tier: user.tier } }
+  return { token, user: { id: user.id, name: user.name, email: user.email, avatarUrl: user.avatarUrl, role: user.role, tier: user.tier, emailVerified: user.emailVerified, emailVerifiedAt: user.emailVerifiedAt, verificationStatus: user.verificationStatus } }
 }
