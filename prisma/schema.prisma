@@ -1,11 +1,394 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
 datasource db {
   provider  = "postgresql"
   url       = env("DATABASE_URL")
   directUrl = env("DIRECT_URL")
 }
 
-generator client {
-  provider = "prisma-client-js"
+model User {
+  id                 String              @id @default(uuid()) @db.Uuid
+  name               String
+  email              String              @unique
+  avatarUrl          String?
+  passwordHash       String?
+  role               Role                @default(STUDENT)
+  status             AccountStatus       @default(ACTIVE)
+  tier               AccountTier         @default(FREE)
+  tierExpiresAt      DateTime?
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
+  aiUsageLogs        AiUsageLog[]
+  auditLogs          AuditLog[]
+  bookmarks          Bookmark[]
+  chatSessions       ChatSession[]
+  collections        Collection[]
+  documentRatings    DocumentRating[]
+  sharesCreated      DocumentShare[]     @relation("SharedBy")
+  sharesReceived     DocumentShare[]     @relation("SharedWith")
+  documentViews      DocumentView[]
+  moderatedDocs      Document[]          @relation("ModeratedDocuments")
+  documents          Document[]          @relation("UserDocuments")
+  forum_posts        forum_posts[]
+  forum_replies      forum_replies[]
+  notifications      Notification[]
+  paymentReceipts    PaymentReceipt[]
+  subjectSuggestions SubjectSuggestion[]
+
+  @@map("users")
+}
+
+model OneTimePassword {
+  id        String   @id @default(uuid()) @db.Uuid
+  email     String
+  otpCode   String
+  expiresAt DateTime
+  attempts  Int      @default(0)
+  createdAt DateTime @default(now())
+
+  @@map("one_time_passwords")
+}
+
+model Subject {
+  id           String              @id @default(uuid()) @db.Uuid
+  name         String
+  code         String              @unique
+  status       AccountStatus       @default(ACTIVE)
+  createdAt    DateTime            @default(now())
+  updatedAt    DateTime            @updatedAt
+  chatSessions ChatSession[]
+  documents    Document[]
+  forum_posts  forum_posts[]
+  suggestions  SubjectSuggestion[]
+
+  @@map("subjects")
+}
+
+model SubjectSuggestion {
+  id           String           @id @default(uuid()) @db.Uuid
+  name         String
+  status       SuggestionStatus @default(PENDING)
+  proposedById String           @db.Uuid
+  subjectId    String?          @db.Uuid
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
+  proposedBy   User             @relation(fields: [proposedById], references: [id])
+  subject      Subject?         @relation(fields: [subjectId], references: [id])
+
+  @@map("subject_suggestions")
+}
+
+model Document {
+  id              String               @id @default(uuid()) @db.Uuid
+  title           String
+  description     String?
+  fileUrl         String
+  fileHash        String
+  fileSize        Int
+  mimeType        String
+  visibility      DocumentVisibility   @default(PRIVATE)
+  status          ModerationStatus     @default(PENDING)
+  rejectionReason String?
+  pageCount       Int                  @default(0)
+  ownerId         String               @db.Uuid
+  subjectId       String               @db.Uuid
+  moderatedById   String?              @db.Uuid
+  moderatedAt     DateTime?
+  createdAt       DateTime             @default(now())
+  updatedAt       DateTime             @updatedAt
+  deletedAt       DateTime?
+  thumbnailUrl    String?
+  aiCaches        AiCache[]
+  auditLogs       AuditLog[]
+  bookmarks       Bookmark[]
+  chatSessions    ChatSession[]
+  citations       Citation[]
+  collections     CollectionDocument[]
+  chunks          DocumentChunk[]
+  ratings         DocumentRating[]
+  shares          DocumentShare[]
+  views           DocumentView[]
+  moderatedBy     User?                @relation("ModeratedDocuments", fields: [moderatedById], references: [id])
+  owner           User                 @relation("UserDocuments", fields: [ownerId], references: [id])
+  subject         Subject              @relation(fields: [subjectId], references: [id])
+  tags            Tag[]                @relation("DocumentToTag")
+
+  @@index([status, deletedAt])
+  @@map("documents")
+}
+
+model DocumentChunk {
+  id         String                 @id @default(uuid()) @db.Uuid
+  documentId String                 @db.Uuid
+  chunkIndex Int
+  pageNumber Int
+  content    String
+  metadata   Json?                  @default("{}")
+  createdAt  DateTime               @default(now())
+  embedding  Unsupported("vector")?
+  document   Document               @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  @@map("document_chunks")
+}
+
+model ChatSession {
+  id         String        @id @default(uuid()) @db.Uuid
+  title      String?
+  userId     String        @db.Uuid
+  documentId String?       @db.Uuid
+  subjectId  String?       @db.Uuid
+  scope      ChatScope     @default(SINGLE_DOCUMENT)
+  createdAt  DateTime      @default(now())
+  updatedAt  DateTime      @updatedAt
+  messages   ChatMessage[]
+  document   Document?     @relation(fields: [documentId], references: [id])
+  subject    Subject?      @relation(fields: [subjectId], references: [id])
+  user       User          @relation(fields: [userId], references: [id])
+
+  @@map("chat_sessions")
+}
+
+model ChatMessage {
+  id        String      @id @default(uuid()) @db.Uuid
+  sessionId String      @db.Uuid
+  sender    SenderType
+  message   String
+  createdAt DateTime    @default(now())
+  session   ChatSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  citations Citation[]
+
+  @@map("chat_messages")
+}
+
+model Citation {
+  id             String      @id @default(uuid()) @db.Uuid
+  messageId      String      @db.Uuid
+  documentId     String      @db.Uuid
+  pageNumber     Int
+  paragraphIndex Int?
+  textExcerpt    String
+  createdAt      DateTime    @default(now())
+  document       Document    @relation(fields: [documentId], references: [id])
+  message        ChatMessage @relation(fields: [messageId], references: [id], onDelete: Cascade)
+
+  @@map("citations")
+}
+
+model PaymentReceipt {
+  id              String        @id @default(uuid()) @db.Uuid
+  userId          String        @db.Uuid
+  planId          String
+  amount          Decimal       @db.Decimal(10, 2)
+  transferContent String        @unique
+  status          PaymentStatus @default(PENDING)
+  createdAt       DateTime      @default(now())
+  verifiedAt      DateTime?
+  user            User          @relation(fields: [userId], references: [id])
+
+  @@map("payment_receipts")
+}
+
+model AuditLog {
+  id           String    @id @default(uuid()) @db.Uuid
+  userId       String?   @db.Uuid
+  action       String
+  targetEntity String
+  targetId     String?
+  documentId   String?   @db.Uuid
+  ipAddress    String?
+  createdAt    DateTime  @default(now())
+  document     Document? @relation(fields: [documentId], references: [id])
+  user         User?     @relation(fields: [userId], references: [id])
+
+  @@map("audit_logs")
+}
+
+model Tag {
+  id          String        @id @default(uuid()) @db.Uuid
+  name        String        @unique
+  createdAt   DateTime      @default(now())
+  documents   Document[]    @relation("DocumentToTag")
+  forum_posts forum_posts[] @relation("ForumPostTags")
+
+  @@map("tags")
+}
+
+model Bookmark {
+  id         String   @id @default(uuid()) @db.Uuid
+  userId     String   @db.Uuid
+  documentId String   @db.Uuid
+  createdAt  DateTime @default(now())
+  document   Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, documentId])
+  @@map("bookmarks")
+}
+
+model DocumentShare {
+  id         String   @id @default(uuid()) @db.Uuid
+  documentId String   @db.Uuid
+  sharedById String   @db.Uuid
+  sharedWith String   @db.Uuid
+  permission String   @default("view")
+  createdAt  DateTime @default(now())
+  document   Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  sharedBy   User     @relation("SharedBy", fields: [sharedById], references: [id], onDelete: Cascade)
+  sharedUser User     @relation("SharedWith", fields: [sharedWith], references: [id], onDelete: Cascade)
+
+  @@unique([documentId, sharedWith])
+  @@map("document_shares")
+}
+
+model Collection {
+  id        String               @id @default(uuid()) @db.Uuid
+  name      String
+  userId    String               @db.Uuid
+  createdAt DateTime             @default(now())
+  updatedAt DateTime             @updatedAt
+  documents CollectionDocument[]
+  user      User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("collections")
+}
+
+model CollectionDocument {
+  id           String     @id @default(uuid()) @db.Uuid
+  collectionId String     @db.Uuid
+  documentId   String     @db.Uuid
+  createdAt    DateTime   @default(now())
+  collection   Collection @relation(fields: [collectionId], references: [id], onDelete: Cascade)
+  document     Document   @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  @@unique([collectionId, documentId])
+  @@map("collection_documents")
+}
+
+model Notification {
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String   @db.Uuid
+  title     String
+  content   String
+  read      Boolean  @default(false)
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("notifications")
+}
+
+model SystemConfig {
+  id          String   @id @default(uuid()) @db.Uuid
+  key         String   @unique
+  value       String
+  label       String?
+  description String?
+  updatedById String?  @db.Uuid
+  updatedAt   DateTime @updatedAt
+
+  @@map("system_configs")
+}
+
+model DocumentView {
+  id         String   @id @default(uuid()) @db.Uuid
+  documentId String   @db.Uuid
+  userId     String?  @db.Uuid
+  ipAddress  String?
+  viewedAt   DateTime @default(now())
+  document   Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  user       User?    @relation(fields: [userId], references: [id])
+
+  @@index([documentId, viewedAt])
+  @@index([userId, viewedAt])
+  @@map("document_views")
+}
+
+model AiUsageLog {
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String   @db.Uuid
+  sessionId String?  @db.Uuid
+  tokensIn  Int      @default(0)
+  tokensOut Int      @default(0)
+  usedAt    DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, usedAt])
+  @@map("ai_usage_logs")
+}
+
+model DocumentRating {
+  id         String   @id @default(uuid()) @db.Uuid
+  documentId String   @db.Uuid
+  userId     String   @db.Uuid
+  rating     Int
+  comment    String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  document   Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([documentId, userId])
+  @@index([documentId])
+  @@map("document_ratings")
+}
+
+model AiCache {
+  id         String   @id @default(uuid()) @db.Uuid
+  queryHash  String   @unique
+  documentId String   @db.Uuid
+  question   String
+  answer     String
+  hitCount   Int      @default(0)
+  createdAt  DateTime @default(now())
+  expiresAt  DateTime
+  document   Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  @@index([documentId])
+  @@index([expiresAt])
+  @@map("ai_cache")
+}
+
+model forum_posts {
+  id                                                     String             @id @db.Uuid
+  title                                                  String
+  content                                                String
+  authorId                                               String             @db.Uuid
+  subjectId                                              String?            @db.Uuid
+  visibility                                             DocumentVisibility @default(PRIVATE)
+  status                                                 ModerationStatus   @default(APPROVED)
+  rejectionReason                                        String?
+  viewCount                                              Int                @default(0)
+  isSolved                                               Boolean            @default(false)
+  solvedReplyId                                          String?            @unique @db.Uuid
+  createdAt                                              DateTime           @default(now())
+  updatedAt                                              DateTime
+  deletedAt                                              DateTime?
+  users                                                  User               @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  forum_replies_forum_posts_solvedReplyIdToforum_replies forum_replies?     @relation("forum_posts_solvedReplyIdToforum_replies", fields: [solvedReplyId], references: [id])
+  subjects                                               Subject?           @relation(fields: [subjectId], references: [id])
+  forum_replies_forum_replies_postIdToforum_posts        forum_replies[]    @relation("forum_replies_postIdToforum_posts")
+  tags                                                   Tag[]              @relation("ForumPostTags")
+
+  @@index([authorId, deletedAt])
+  @@index([status, visibility, deletedAt])
+  @@index([subjectId])
+}
+
+model forum_replies {
+  id                                                   String       @id @db.Uuid
+  postId                                               String       @db.Uuid
+  authorId                                             String       @db.Uuid
+  content                                              String
+  isHelpful                                            Boolean      @default(false)
+  createdAt                                            DateTime     @default(now())
+  updatedAt                                            DateTime
+  forum_posts_forum_posts_solvedReplyIdToforum_replies forum_posts? @relation("forum_posts_solvedReplyIdToforum_replies")
+  users                                                User         @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  forum_posts_forum_replies_postIdToforum_posts        forum_posts  @relation("forum_replies_postIdToforum_posts", fields: [postId], references: [id], onDelete: Cascade)
+
+  @@index([authorId])
+  @@index([postId, createdAt])
 }
 
 enum Role {
@@ -15,8 +398,8 @@ enum Role {
 
 enum AccountStatus {
   ACTIVE
-  UNVERIFIED
   SUSPENDED
+  UNVERIFIED
 }
 
 enum AccountTier {
@@ -56,360 +439,4 @@ enum SuggestionStatus {
   PENDING
   APPROVED
   REJECTED
-}
-
-model User {
-  id                 String              @id @default(uuid()) @db.Uuid
-  name               String
-  email              String              @unique
-  avatarUrl          String?
-  passwordHash       String?
-  role               Role                @default(STUDENT)
-  status             AccountStatus       @default(ACTIVE)
-  tier               AccountTier         @default(FREE)
-  createdAt          DateTime            @default(now())
-  updatedAt          DateTime            @updatedAt
-  documents          Document[]          @relation("UserDocuments")
-  moderatedDocs      Document[]          @relation("ModeratedDocuments")
-  subjectSuggestions SubjectSuggestion[]
-  collections        Collection[]
-  chatSessions       ChatSession[]
-  paymentReceipts    PaymentReceipt[]
-  auditLogs          AuditLog[]
-  bookmarks          Bookmark[]
-  sharesReceived     DocumentShare[]     @relation("SharedWith")
-  sharesCreated      DocumentShare[]     @relation("SharedBy")
-  notifications      Notification[]
-  documentViews      DocumentView[]
-  aiUsageLogs        AiUsageLog[]
-  documentRatings    DocumentRating[]
-
-  @@map("users")
-}
-
-model OneTimePassword {
-  id        String   @id @default(uuid()) @db.Uuid
-  email     String
-  otpCode   String
-  expiresAt DateTime
-  attempts  Int      @default(0)
-  createdAt DateTime @default(now())
-
-  @@map("one_time_passwords")
-}
-
-model Subject {
-  id           String             @id @default(uuid()) @db.Uuid
-  name         String
-  code         String             @unique
-  status       AccountStatus      @default(ACTIVE)
-  createdAt    DateTime           @default(now())
-  updatedAt    DateTime           @updatedAt
-  documents    Document[]
-  chatSessions ChatSession[]
-  suggestions  SubjectSuggestion[]
-
-  @@map("subjects")
-}
-
-model SubjectSuggestion {
-  id           String           @id @default(uuid()) @db.Uuid
-  name         String
-  status       SuggestionStatus @default(PENDING)
-  proposedById String           @db.Uuid
-  proposedBy   User             @relation(fields: [proposedById], references: [id])
-  subjectId    String?          @db.Uuid
-  subject      Subject?         @relation(fields: [subjectId], references: [id])
-  createdAt    DateTime         @default(now())
-  updatedAt    DateTime         @updatedAt
-
-  @@map("subject_suggestions")
-}
-
-model Document {
-  id              String             @id @default(uuid()) @db.Uuid
-  title           String
-  description     String?            @db.Text
-  thumbnailUrl    String?
-  fileUrl         String
-  fileHash        String
-  fileSize        Int
-  mimeType        String
-  visibility      DocumentVisibility @default(PRIVATE)
-  status          ModerationStatus   @default(PENDING)
-  rejectionReason String?            @db.Text
-  pageCount       Int                @default(0)
-  ownerId         String             @db.Uuid
-  owner           User               @relation("UserDocuments", fields: [ownerId], references: [id])
-  subjectId       String             @db.Uuid
-  subject         Subject            @relation(fields: [subjectId], references: [id])
-  moderatedById   String?            @db.Uuid
-  moderatedBy     User?              @relation("ModeratedDocuments", fields: [moderatedById], references: [id])
-  moderatedAt     DateTime?
-  createdAt       DateTime           @default(now())
-  updatedAt       DateTime           @updatedAt
-  deletedAt       DateTime?
-  chunks          DocumentChunk[]
-  chatSessions    ChatSession[]
-  citations       Citation[]
-  auditLogs       AuditLog[]
-  tags            Tag[]
-  bookmarks       Bookmark[]
-  shares          DocumentShare[]
-  collections     CollectionDocument[]
-  views           DocumentView[]
-  ratings         DocumentRating[]
-  aiCaches        AiCache[]
-
-  @@index([status, deletedAt])
-  @@map("documents")
-}
-
-model DocumentChunk {
-  id         String   @id @default(uuid()) @db.Uuid
-  documentId String   @db.Uuid
-  document   Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
-  chunkIndex Int
-  pageNumber Int
-  content    String   @db.Text
-  metadata   Json?    @default("{}")
-  embedding  Unsupported("vector(768)")?
-  createdAt  DateTime @default(now())
-
-  @@map("document_chunks")
-}
-
-model ChatSession {
-  id        String        @id @default(uuid()) @db.Uuid
-  title     String?
-  userId    String        @db.Uuid
-  user      User          @relation(fields: [userId], references: [id])
-  documentId String?      @db.Uuid
-  document  Document?     @relation(fields: [documentId], references: [id])
-  subjectId String?       @db.Uuid
-  subject   Subject?      @relation(fields: [subjectId], references: [id])
-  scope     ChatScope     @default(SINGLE_DOCUMENT)
-  createdAt DateTime      @default(now())
-  updatedAt DateTime      @updatedAt
-  messages  ChatMessage[]
-
-  @@map("chat_sessions")
-}
-
-model ChatMessage {
-  id        String      @id @default(uuid()) @db.Uuid
-  sessionId String      @db.Uuid
-  session   ChatSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
-  sender    SenderType
-  message   String      @db.Text
-  createdAt DateTime    @default(now())
-  citations Citation[]
-
-  @@map("chat_messages")
-}
-
-model Citation {
-  id             String      @id @default(uuid()) @db.Uuid
-  messageId      String      @db.Uuid
-  message        ChatMessage @relation(fields: [messageId], references: [id], onDelete: Cascade)
-  documentId     String      @db.Uuid
-  document       Document    @relation(fields: [documentId], references: [id])
-  pageNumber     Int
-  paragraphIndex Int?
-  textExcerpt    String      @db.Text
-  createdAt      DateTime    @default(now())
-
-  @@map("citations")
-}
-
-model PaymentReceipt {
-  id              String        @id @default(uuid()) @db.Uuid
-  userId          String        @db.Uuid
-  user            User          @relation(fields: [userId], references: [id])
-  planId          String
-  amount          Decimal       @db.Decimal(10, 2)
-  transferContent String        @unique
-  status          PaymentStatus @default(PENDING)
-  createdAt       DateTime      @default(now())
-  verifiedAt      DateTime?
-
-  @@map("payment_receipts")
-}
-
-model AuditLog {
-  id           String    @id @default(uuid()) @db.Uuid
-  userId       String?   @db.Uuid
-  user         User?     @relation(fields: [userId], references: [id])
-  action       String
-  targetEntity String
-  targetId     String?
-  documentId   String?   @db.Uuid
-  document     Document? @relation(fields: [documentId], references: [id])
-  ipAddress    String?
-  createdAt    DateTime  @default(now())
-
-  @@map("audit_logs")
-}
-
-model Tag {
-  id        String     @id @default(uuid()) @db.Uuid
-  name      String     @unique
-  documents Document[]
-  createdAt DateTime   @default(now())
-
-  @@map("tags")
-}
-
-model Bookmark {
-  id         String   @id @default(uuid()) @db.Uuid
-  userId     String   @db.Uuid
-  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  documentId String   @db.Uuid
-  document   Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
-  createdAt  DateTime @default(now())
-
-  @@unique([userId, documentId])
-  @@map("bookmarks")
-}
-
-model DocumentShare {
-  id         String   @id @default(uuid()) @db.Uuid
-  documentId String   @db.Uuid
-  document   Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
-  sharedById String   @db.Uuid
-  sharedBy   User     @relation("SharedBy", fields: [sharedById], references: [id], onDelete: Cascade)
-  sharedWith String   @db.Uuid
-  sharedUser User     @relation("SharedWith", fields: [sharedWith], references: [id], onDelete: Cascade)
-  permission String   @default("view") // "view", "comment", "edit"
-  createdAt  DateTime @default(now())
-
-  @@unique([documentId, sharedWith])
-  @@map("document_shares")
-}
-
-model Collection {
-  id        String                @id @default(uuid()) @db.Uuid
-  name      String
-  userId    String                @db.Uuid
-  user      User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
-  documents CollectionDocument[]
-  createdAt DateTime              @default(now())
-  updatedAt DateTime              @updatedAt
-
-  @@map("collections")
-}
-
-model CollectionDocument {
-  id           String     @id @default(uuid()) @db.Uuid
-  collectionId String     @db.Uuid
-  collection   Collection @relation(fields: [collectionId], references: [id], onDelete: Cascade)
-  documentId   String     @db.Uuid
-  document     Document   @relation(fields: [documentId], references: [id], onDelete: Cascade)
-  createdAt    DateTime   @default(now())
-
-  @@unique([collectionId, documentId])
-  @@map("collection_documents")
-}
-
-model Notification {
-  id        String   @id @default(uuid()) @db.Uuid
-  userId    String   @db.Uuid
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  title     String
-  content   String   @db.Text
-  read      Boolean  @default(false)
-  createdAt DateTime @default(now())
-
-  @@map("notifications")
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// System Configuration (Admin-configurable settings without redeploy)
-// ─────────────────────────────────────────────────────────────────────────────
-
-model SystemConfig {
-  id          String   @id @default(uuid()) @db.Uuid
-  key         String   @unique // e.g. "max_file_size_mb", "free_ai_limit", "allowed_mime_types"
-  value       String   // JSON string or plain value
-  label       String?  // Human-readable label for Admin UI
-  description String?  @db.Text
-  updatedById String?  @db.Uuid
-  updatedAt   DateTime @updatedAt
-
-  @@map("system_configs")
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Document Views (for analytics dashboard)
-// ─────────────────────────────────────────────────────────────────────────────
-
-model DocumentView {
-  id         String   @id @default(uuid()) @db.Uuid
-  documentId String   @db.Uuid
-  document   Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
-  userId     String?  @db.Uuid
-  user       User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
-  ipAddress  String?
-  viewedAt   DateTime @default(now())
-
-  @@index([documentId, viewedAt])
-  @@index([userId, viewedAt])
-  @@map("document_views")
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// AI Usage Logs (rate limiting: Free=10/day, Premium=50/day)
-// ─────────────────────────────────────────────────────────────────────────────
-
-model AiUsageLog {
-  id        String      @id @default(uuid()) @db.Uuid
-  userId    String      @db.Uuid
-  user      User        @relation(fields: [userId], references: [id], onDelete: Cascade)
-  sessionId String?     @db.Uuid
-  tokensIn  Int         @default(0)
-  tokensOut Int         @default(0)
-  usedAt    DateTime    @default(now())
-
-  @@index([userId, usedAt])
-  @@map("ai_usage_logs")
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Document Ratings (1-5 stars + optional comment)
-// ─────────────────────────────────────────────────────────────────────────────
-
-model DocumentRating {
-  id         String   @id @default(uuid()) @db.Uuid
-  documentId String   @db.Uuid
-  document   Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
-  userId     String   @db.Uuid
-  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  rating     Int      // 1-5
-  comment    String?  @db.Text
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
-
-  @@unique([documentId, userId])
-  @@index([documentId])
-  @@map("document_ratings")
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// AI Answer Cache (reduce OpenAI costs for repeated queries)
-// ─────────────────────────────────────────────────────────────────────────────
-
-model AiCache {
-  id         String   @id @default(uuid()) @db.Uuid
-  queryHash  String   @unique // SHA-256 of (documentId + normalized question)
-  documentId String   @db.Uuid
-  document   Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
-  question   String   @db.Text
-  answer     String   @db.Text
-  hitCount   Int      @default(0)
-  createdAt  DateTime @default(now())
-  expiresAt  DateTime // TTL — auto-expire stale cache
-
-  @@index([documentId])
-  @@index([expiresAt])
-  @@map("ai_cache")
 }

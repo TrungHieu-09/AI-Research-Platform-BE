@@ -8,7 +8,7 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    const user = await db.user.findUnique({
+    let user = await db.user.findUnique({
       where: { id: userId },
       select: {
         id: true,
@@ -18,12 +18,21 @@ export async function GET(req: NextRequest) {
         role: true,
         status: true,
         tier: true,
+        tierExpiresAt: true,
         updatedAt: true
       }
     })
 
     if (!user) {
       return NextResponse.json({ error: "User not found" }, { status: 404 })
+    }
+
+    if (user.tierExpiresAt && new Date(user.tierExpiresAt) < new Date()) {
+      await db.user.update({
+        where: { id: userId },
+        data: { tier: "FREE", tierExpiresAt: null }
+      })
+      user = { ...user, tier: "FREE", tierExpiresAt: null }
     }
 
     return NextResponse.json({ user }, { status: 200 })
