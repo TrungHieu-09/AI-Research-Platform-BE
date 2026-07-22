@@ -1,6 +1,8 @@
 import { db } from "@/lib/db"
 import type { UploadMetadataInput, ModerationDecisionInput } from "@/lib/validation/doc"
 import { autoIngestDocument } from "@/lib/services/ingest-service"
+import { downloadDocumentFileFromStorage } from "@/lib/storage"
+import { checkPublicDocumentContentDuplicate } from "@/lib/services/document-duplicate-service"
 
 // ──────────────────────────────────────────────────────────────────────────────
 // Document listing
@@ -167,18 +169,10 @@ export async function getDocumentById(id: string, requestingUserId: string, requ
 // ──────────────────────────────────────────────────────────────────────────────
 
 export async function createDocument(ownerId: string, input: UploadMetadataInput) {
-  // Deduplication check: check if an approved document with the exact same hash exists
-  const duplicate = input.fileHash ? await db.document.findFirst({
-    where: { fileHash: input.fileHash, deletedAt: null, status: "APPROVED" },
-  }) : null
-
-  // If duplicate exists, reuse its storage fileUrl so we don't store duplicate files
-  const fileUrl = duplicate ? duplicate.fileUrl : input.fileUrl
 
   const doc = await db.document.create({
     data: {
       ...input,
-      fileUrl,
       ownerId,
       status: input.visibility === "PUBLIC" ? "PENDING" : "APPROVED",
     },
@@ -213,6 +207,21 @@ export async function softDeleteDocument(id: string, requestingUserId: string, r
   })
 }
 
+type DocumentDuplicateErrorPayload = {
+  documentId: string
+  title: string
+  similarity: number
+}
+
+function buildDocumentDuplicateError(duplicate: DocumentDuplicateErrorPayload) {
+  const error = new Error(`Tài liệu bị trùng với "${duplicate.title}".`) as Error & {
+    statusCode?: number
+    duplicate?: DocumentDuplicateErrorPayload
+  }
+  error.statusCode = 409
+  error.duplicate = duplicate
+  return error
+}
 // ──────────────────────────────────────────────────────────────────────────────
 // Moderation
 // ──────────────────────────────────────────────────────────────────────────────
@@ -235,6 +244,36 @@ export async function moderateDocument(
     throw new Error("Invalid document moderation transition.")
   }
 
+  if (input.decision === "APPROVED") {
+    if (doc.fileHash) {
+      const olderExactDuplicate = await db.document.findFirst({
+        where: {
+          id: { not: doc.id },
+          fileHash: doc.fileHash,
+          visibility: "PUBLIC",
+          deletedAt: null,
+          createdAt: { lt: doc.createdAt },
+          status: { in: ["PENDING", "APPROVED"] },
+        },
+        select: { id: true, title: true },
+        orderBy: { createdAt: "asc" },
+      })
+
+      if (olderExactDuplicate) {
+        throw buildDocumentDuplicateError({
+          documentId: olderExactDuplicate.id,
+          title: olderExactDuplicate.title,
+          similarity: 1,
+        })
+      }
+    }
+
+    const fileBuffer = await downloadDocumentFileFromStorage(doc.fileUrl)
+    const duplicate = await checkPublicDocumentContentDuplicate(fileBuffer, doc.mimeType || doc.title, 0.8, doc.id)
+    if (duplicate) {
+      throw buildDocumentDuplicateError(duplicate)
+    }
+  }
   const updated = await db.document.update({
     where: { id },
     data: {

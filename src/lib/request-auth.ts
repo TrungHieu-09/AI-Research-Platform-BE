@@ -7,6 +7,25 @@ export type RequestUser = {
   tier: string
 }
 
+
+export async function getOptionalBearerUser(req: NextRequest) {
+  const token = req.headers.get("Authorization")?.split(" ")[1]
+  if (!token || !process.env.JWT_SECRET) return null
+
+  try {
+    const secret = new TextEncoder().encode(process.env.JWT_SECRET)
+    const { payload } = await jwtVerify(token, secret)
+    if (!payload.sub) return null
+
+    return {
+      id: payload.sub as string,
+      role: (payload.role as RequestUser["role"]) ?? "STUDENT",
+      tier: (payload.tier as string) ?? "FREE",
+    }
+  } catch {
+    return null
+  }
+}
 export async function requireBearerUser(req: NextRequest) {
   const token = req.headers.get("Authorization")?.split(" ")[1]
   if (!token || !process.env.JWT_SECRET) throw new Error("Authentication required.")

@@ -54,6 +54,8 @@ import { moderateDocument } from "@/lib/services/doc-service"
  *         description: Access denied (Admin role required).
  *       404:
  *         description: Document not found.
+ *       409:
+ *         description: Duplicate document content or newer duplicate upload request.
  *       422:
  *         description: Validation error.
  */
@@ -77,7 +79,10 @@ export async function POST(req: NextRequest, context: { params: Promise<{ id: st
     const doc = await moderateDocument(id, adminId, parsed.data, ipAddress)
     return NextResponse.json(doc)
   } catch (err: any) {
-    const status = err.message === "Document not found." ? 404 : 400
-    return NextResponse.json({ error: err.message }, { status })
+    const message = err.message ?? "Failed to moderate document."
+    const status = err.statusCode ?? (message === "Document not found." ? 404 : message.toLowerCase().includes("storage") ? 502 : 400)
+    const body: any = { error: message }
+    if (err.duplicate) body.duplicate = err.duplicate
+    return NextResponse.json(body, { status })
   }
 }
