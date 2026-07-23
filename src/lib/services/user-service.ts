@@ -11,9 +11,7 @@ export const userProfileSelect = {
   role: true,
   status: true,
   tier: true,
-  emailVerified: true,
-  emailVerifiedAt: true,
-  verificationStatus: true,
+  tierExpiresAt: true,
   createdAt: true,
   updatedAt: true,
 } as const
@@ -23,9 +21,7 @@ export const publicUserVerificationSelect = {
   name: true,
   email: true,
   avatarUrl: true,
-  emailVerified: true,
-  emailVerifiedAt: true,
-  verificationStatus: true,
+
 } as const
 
 export async function createUserByAdmin(input: AdminCreateUserInput) {
@@ -41,9 +37,7 @@ export async function createUserByAdmin(input: AdminCreateUserInput) {
       passwordHash,
       role: input.role ?? "STUDENT",
       status: "ACTIVE",
-      emailVerified: false,
-      emailVerifiedAt: null,
-      verificationStatus: "UNVERIFIED",
+
     },
     select: userProfileSelect,
   })
@@ -52,7 +46,7 @@ export async function createUserByAdmin(input: AdminCreateUserInput) {
 export async function requestProfileEmailVerificationOtp(userId: string) {
   const user = await db.user.findUnique({ where: { id: userId }, select: userProfileSelect })
   if (!user) throw new Error("User not found.")
-  if (user.emailVerified) {
+  if (user.status !== "UNVERIFIED") {
     return {
       message: "Sinh trắc học đã xác thực",
       email: user.email,
@@ -81,7 +75,7 @@ export async function requestProfileEmailVerificationOtp(userId: string) {
 export async function verifyProfileEmailOtp(userId: string, input: ProfileEmailVerificationOtpInput) {
   const user = await db.user.findUnique({ where: { id: userId }, select: userProfileSelect })
   if (!user) throw new Error("User not found.")
-  if (user.emailVerified) {
+  if (user.status !== "UNVERIFIED") {
     return {
       message: "Sinh trắc học đã xác thực",
       user,
@@ -108,9 +102,7 @@ export async function verifyProfileEmailOtp(userId: string, input: ProfileEmailV
   const updatedUser = await db.user.update({
     where: { id: userId },
     data: {
-      emailVerified: true,
-      emailVerifiedAt: new Date(),
-      verificationStatus: "VERIFIED",
+      status: "ACTIVE",
     },
     select: userProfileSelect,
   })

@@ -336,14 +336,14 @@ export async function verifyOtp(input: VerifyOtpInput) {
   // Activate the user account
   const user = await db.user.update({
     where: { email: input.email },
-    data: { status: "ACTIVE", emailVerified: true, emailVerifiedAt: new Date(), verificationStatus: "VERIFIED" },
+    data: { status: "ACTIVE" },
   })
 
   // Clean up OTP record
   await db.oneTimePassword.delete({ where: { id: otp.id } })
 
   const token = await signToken({ sub: user.id, role: user.role, tier: user.tier })
-  return { token, user: { id: user.id, name: user.name, email: user.email, role: user.role, tier: user.tier, emailVerified: user.emailVerified, emailVerifiedAt: user.emailVerifiedAt, verificationStatus: user.verificationStatus } }
+  return { token, user: { id: user.id, name: user.name, email: user.email, role: user.role, tier: user.tier } }
 }
 
 export async function loginUser(input: LoginInput) {
@@ -385,9 +385,6 @@ export async function loginUser(input: LoginInput) {
       avatarUrl: user.avatarUrl,
       role: user.role,
       tier: currentTier,
-      emailVerified: user.emailVerified,
-      emailVerifiedAt: user.emailVerifiedAt,
-      verificationStatus: user.verificationStatus,
     },
   }
 }
@@ -447,9 +444,6 @@ export async function googleLoginUser(input: GoogleAuthInput) {
       avatarUrl: user.avatarUrl,
       role: user.role,
       tier: currentTier,
-      emailVerified: user.emailVerified,
-      emailVerifiedAt: user.emailVerifiedAt,
-      verificationStatus: user.verificationStatus,
     },
   }
 }
