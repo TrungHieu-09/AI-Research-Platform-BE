@@ -9,9 +9,18 @@ import { z } from "zod"
  *     summary: Payment Gateway Webhook Callback
  *     description: >
  *       Callback endpoint used by banking gateway or payment provider when a bank transfer completes.
- *       Automatically verifies transaction, upgrades user tier to PREMIUM, and logs payment history.
+ *       SUCCESS or COMPLETED transactions can activate Premium when transferContent is valid and
+ *       the amount is sufficient. FAILED, CANCELLED, and PENDING transactions do not activate Premium.
+ *       When PAYMENT_WEBHOOK_SECRET is configured, requests must include the x-api-key header.
  *     tags:
  *       - Payments
+ *     parameters:
+ *       - in: header
+ *         name: x-api-key
+ *         required: false
+ *         description: Optional in local development; required when PAYMENT_WEBHOOK_SECRET is configured.
+ *         schema:
+ *           type: string
  *     requestBody:
  *       required: true
  *       content:
@@ -28,9 +37,16 @@ import { z } from "zod"
  *               amount:
  *                 type: number
  *                 example: 99000
+ *               status:
+ *                 type: string
+ *                 enum: [SUCCESS, COMPLETED, FAILED, CANCELLED, PENDING]
+ *                 description: Optional payment provider status.
+ *                 example: "SUCCESS"
  *     responses:
  *       200:
- *         description: Webhook received and subscription activated.
+ *         description: Webhook received. Premium is activated only for valid successful payments with sufficient amount.
+ *       401:
+ *         description: Invalid payment webhook API key.
  *       400:
  *         description: Invalid transaction signature or mismatch.
  *       422:
