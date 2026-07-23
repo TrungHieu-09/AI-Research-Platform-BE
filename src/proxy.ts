@@ -64,6 +64,12 @@ export default async function proxy(request: NextRequest) {
 
   const pathname = request.nextUrl.pathname
 
+  if (/^\/api\/documents\/[^/]+\/(preview|download)$/.test(pathname)) {
+    const response = NextResponse.next()
+    response.headers.set("Access-Control-Allow-Origin", origin)
+    return response
+  }
+
   // Find the most specific (longest path) matching rule
   const matchedRule = ROUTE_RULES.filter((rule) => pathname.startsWith(rule.path)).sort(
     (a, b) => b.path.length - a.path.length,

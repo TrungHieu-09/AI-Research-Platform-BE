@@ -135,6 +135,7 @@ import { db } from "@/lib/db"
 import { getEmbeddings } from "@/lib/vector"
 import fs from "fs"
 import path from "path"
+import { downloadDocumentFileFromStorage } from "@/lib/storage"
 
 /**
  * Ingest a document (from PDF Buffer or raw text) into PostgreSQL vector storage (`document_chunks`).
