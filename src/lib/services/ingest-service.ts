@@ -221,12 +221,7 @@ export async function autoIngestDocument(documentId: string, fileUrl: string) {
       fileBuffer = Buffer.from(fallbackText, "utf-8")
     }
   } else {
-    const res = await fetch(fileUrl)
-    if (!res.ok) {
-      throw new Error(`Failed to fetch remote document file at ${fileUrl}: ${res.statusText}`)
-    }
-    const arrayBuffer = await res.arrayBuffer()
-    fileBuffer = Buffer.from(arrayBuffer)
+    fileBuffer = await downloadDocumentFileFromStorage(fileUrl)
   }
 
   return ingestDocumentToVector(documentId, fileBuffer)

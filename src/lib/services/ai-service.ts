@@ -216,6 +216,14 @@ export async function processChatQuery(
   if (!effectiveAttachedFile) {
     const queryEmbedding = await getEmbeddings(message)
     matchedChunks = await searchSimilarChunks(queryEmbedding, 5, normalizedDocId, normalizedSubjectId)
+  } else if (attachedFileText) {
+    // Inject a dummy chunk for direct attachments so UI shows citations!
+    matchedChunks = [{
+      documentId: null, // null so it skips DB persistence
+      title: effectiveAttachedFile.name || "Tài liệu đính kèm trực tiếp",
+      pageNumber: 1,
+      content: attachedFileText
+    }]
   }
 
   // 3. Build contextual prompt with citations and attached file content
@@ -335,9 +343,10 @@ You have been provided with the user's directly attached document ("${effectiveA
   })
 
   // 9. Persist citations
-  if (matchedChunks.length > 0) {
+  const validChunksForDb = matchedChunks.filter(c => c.documentId);
+  if (validChunksForDb.length > 0) {
     await db.citation.createMany({
-      data: matchedChunks.map((chunk) => ({
+      data: validChunksForDb.map((chunk) => ({
         messageId: aiMessage.id,
         documentId: chunk.documentId,
         pageNumber: chunk.pageNumber,
