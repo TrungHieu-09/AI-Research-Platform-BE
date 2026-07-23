@@ -11,6 +11,7 @@ export const userProfileSelect = {
   role: true,
   status: true,
   tier: true,
+  tierExpiresAt: true,
   createdAt: true,
   updatedAt: true,
 } as const
@@ -20,6 +21,7 @@ export const publicUserVerificationSelect = {
   name: true,
   email: true,
   avatarUrl: true,
+
 } as const
 
 export async function createUserByAdmin(input: AdminCreateUserInput) {
@@ -35,6 +37,7 @@ export async function createUserByAdmin(input: AdminCreateUserInput) {
       passwordHash,
       role: input.role ?? "STUDENT",
       status: "ACTIVE",
+
     },
     select: userProfileSelect,
   })
@@ -43,7 +46,7 @@ export async function createUserByAdmin(input: AdminCreateUserInput) {
 export async function requestProfileEmailVerificationOtp(userId: string) {
   const user = await db.user.findUnique({ where: { id: userId }, select: userProfileSelect })
   if (!user) throw new Error("User not found.")
-  if (user.status === "ACTIVE") {
+  if (user.status !== "UNVERIFIED") {
     return {
       message: "Sinh trắc học đã xác thực",
       email: user.email,
@@ -72,7 +75,7 @@ export async function requestProfileEmailVerificationOtp(userId: string) {
 export async function verifyProfileEmailOtp(userId: string, input: ProfileEmailVerificationOtpInput) {
   const user = await db.user.findUnique({ where: { id: userId }, select: userProfileSelect })
   if (!user) throw new Error("User not found.")
-  if (user.status === "ACTIVE") {
+  if (user.status !== "UNVERIFIED") {
     return {
       message: "Sinh trắc học đã xác thực",
       user,
