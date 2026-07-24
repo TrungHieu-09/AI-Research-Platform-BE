@@ -38,14 +38,14 @@ export async function POST(req: NextRequest) {
     // Fetch user with password hash
     const user = await db.user.findUnique({
       where: { id: authUser.id },
-      select: { id: true, password: true },
+      select: { id: true, passwordHash: true },
     })
 
     if (!user) {
       return NextResponse.json({ error: "Không tìm thấy người dùng." }, { status: 404 })
     }
 
-    if (!user.password) {
+    if (!user.passwordHash) {
       return NextResponse.json(
         { error: "Tài khoản này không có mật khẩu (đăng nhập bằng OAuth). Vui lòng liên hệ IT Support." },
         { status: 400 },
@@ -53,7 +53,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Verify current password
-    const isMatch = await bcrypt.compare(currentPassword, user.password)
+    const isMatch = await bcrypt.compare(currentPassword, user.passwordHash)
     if (!isMatch) {
       return NextResponse.json(
         { error: "Mật khẩu hiện tại không đúng." },
@@ -66,7 +66,7 @@ export async function POST(req: NextRequest) {
 
     await db.user.update({
       where: { id: authUser.id },
-      data: { password: hashed },
+      data: { passwordHash: hashed },
     })
 
     return NextResponse.json(
