@@ -213,9 +213,20 @@ export async function processChatQuery(
   // 2. Vector similarity search (RAG context retrieval)
   // ONLY search library chunks if there is NO directly attached file (`!effectiveAttachedFile`)!
   let matchedChunks: any[] = []
+  let libraryDocumentTitle = ""
+
   if (!effectiveAttachedFile) {
     const queryEmbedding = await getEmbeddings(message)
-    matchedChunks = await searchSimilarChunks(queryEmbedding, 5, normalizedDocId, normalizedSubjectId)
+    matchedChunks = await searchSimilarChunks(queryEmbedding, 10, normalizedDocId, normalizedSubjectId)
+
+    if (normalizedDocId) {
+      try {
+        const docInfo = await db.document.findUnique({ where: { id: normalizedDocId }, select: { title: true } })
+        if (docInfo) libraryDocumentTitle = docInfo.title
+      } catch (e) {
+        // ignore
+      }
+    }
   } else if (attachedFileText) {
     // Inject a dummy chunk for direct attachments so UI shows citations!
     matchedChunks = [{
@@ -268,7 +279,7 @@ You have been provided with the user's directly attached document ("${effectiveA
 - **If analyzing an SRS / Project Document**: Summarize system objectives, functional/non-functional requirements table, and architectural highlights.
 - **If no selectable text layer could be extracted**: Politely inform the user that the file '${effectiveAttachedFile.name}' appears to be a scanned image or file without selectable text layer, requesting them to provide an OCR-processed PDF or Word document.`
     : `You are Lumis AI, an elite academic research assistant and technical mentor for FPT University students.
-
+${libraryDocumentTitle ? \`\nYou are currently discussing the library document: "\${libraryDocumentTitle}". If the user's request is generic (e.g. "phân tích", "tóm tắt"), analyze this document based on the provided excerpts.\n\` : ""}
 ### MANDATORY RESPONSE FORMATTING & UI/UX AESTHETICS RULES:
 1. **Clean & Professional Hierarchy**: Use engaging headings (\`### 📌\`, \`#### 💡\`), concise bullet points (\`- \`), and clean line breaks. Never output monolithic walls of text. Keep every paragraph short (2-3 sentences) separated by blank lines.
 2. **Strict Bullet Lists**: ALWAYS use hyphens \`- \` (\`- **Khái niệm:** ...\`) for bullet items. NEVER use single asterisks (\`*\`) for bullet points or lists.
@@ -279,8 +290,9 @@ You have been provided with the user's directly attached document ("${effectiveA
 7. **Ending Summary**: For detailed answers, end with two sections: \`### 📑 Tóm Tắt\` and \`### 🚀 Khuyến Nghị Tiếp Theo\`.
 
 ### ACCURACY RULES:
-- Answer questions STRICTLY and ONLY based on the provided document excerpts from the library and previous conversation context.
-- **Out of Context Rule**: If the library context does not contain enough information to answer the question definitively, you MUST politely refuse to answer and state clearly: "Xin lỗi, thông tin bạn hỏi không có trong tài liệu hiện tại." (Sorry, the information you asked for is not in the current document). Do NOT use your general knowledge or offer outside academic guidance.`;
+- Answer questions based on the provided document excerpts from the library and previous conversation context.
+- If the user asks to summarize, analyze, or explain the document without a specific question, use the excerpts to provide a comprehensive and logical summary.
+- **Out of Context Rule**: If the user asks for a specific factual answer that is NOT in the excerpts, you MUST politely state clearly: "Xin lỗi, thông tin bạn hỏi không có trong tài liệu hiện tại." (Sorry, the information you asked for is not in the current document). However, DO NOT refuse if they simply ask for an analysis or summary.`;
 
   // Build multi-turn history for Gemini
   const geminiHistory: { role: "user" | "model"; parts: [{ text: string }] }[] = []
